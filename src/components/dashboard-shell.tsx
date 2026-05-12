@@ -1,0 +1,1884 @@
+"use client";
+
+import { useDeferredValue, useState, useTransition } from "react";
+import { addDays, differenceInCalendarDays, format, isValid, parseISO } from "date-fns";
+import { ArrowUpRight, Copy, ImageIcon } from "lucide-react";
+import { AUTO_CLASS_LABELS, PLATFORM_OPTIONS, STATUS_LABELS } from "@/lib/constants";
+import { AppSettingsDto, CompetitorPostDto, ContentPostDto, DashboardState, ImageAssetDto, ProjectDto, ProjectProfileDto, PublishedPostDto } from "@/lib/types";
+import { cn } from "@/lib/utils";
+
+interface DashboardShellProps {
+  initialState: DashboardState;
+}
+
+const IMAGE_FORMAT_TEMPLATES = [
+  {
+    key: "carousel",
+    label: "Carousel",
+    resolution: "1080x1350",
+    aspect: "4:5 vertical Instagram feed frame",
+    hint: "premium editorial carousel cover, warm refined light, tasteful fashion-magazine quality",
+    subjectRule: "one clear central subject that carries the post idea; no multi-panel mockup unless requested",
+    compositionRule: "balanced feed composition with a calm headline area, clear visual hierarchy, and no cluttered collage",
+    cameraRule: "natural 50mm editorial perspective, medium crop or detail crop, no distorted wide angle",
+    textRule: "leave clean negative space for typography added later; do not render words inside the image",
+  },
+  {
+    key: "offer_banner",
+    label: "Offer banner",
+    resolution: "1080x1350",
+    aspect: "4:5 or 1:1 social promo frame",
+    hint: "premium offer banner, polished commercial editorial, warm neutrals with one accent color",
+    subjectRule: "single offer/product focal point with room for a short headline and price/CTA added later",
+    compositionRule: "structured banner layout, product or person on one side, clean readable negative space on the other",
+    cameraRule: "studio-commercial framing, sharp product detail, controlled shadows",
+    textRule: "reserve a clean typography zone; do not generate readable or fake text",
+  },
+  {
+    key: "reels_tiktok_cover",
+    label: "Reels/TikTok cover",
+    resolution: "1080x1920",
+    aspect: "9:16 vertical mobile cover",
+    hint: "premium editorial vertical cover, warm refined light, immediate first-frame impact",
+    subjectRule: "one strong first-frame subject visible in the upper and middle thirds",
+    compositionRule: "mobile-first composition with clear focal point, face/product/detail not cropped, negative space for cover title",
+    cameraRule: "vertical portrait/editorial framing, natural perspective, crisp details",
+    textRule: "leave a clean title area; no generated words, letters, subtitles, or UI overlays",
+  },
+  {
+    key: "product_on_body",
+    label: "Product on body",
+    resolution: "1080x1350",
+    aspect: "4:5 vertical product-on-body frame",
+    hint: "premium product-on-body editorial photo, realistic adult model, warm refined light",
+    subjectRule: "adult woman wearing the selected product; garment fit, shape, color, fabric, straps, and details must match the product reference",
+    compositionRule: "product detail visible, tasteful crop, elegant posture, clean background with negative space",
+    cameraRule: "realistic editorial photography, 50mm lens feel, natural body proportions and skin texture",
+    textRule: "no text inside the image; leave optional quiet space for later typography",
+  },
+  {
+    key: "product_still",
+    label: "Product still",
+    resolution: "1080x1350",
+    aspect: "4:5 or 1:1 product-only frame",
+    hint: "premium product still life, tactile fabric detail, refined commercial lighting",
+    subjectRule: "selected product only; show fabric, construction, silhouette, and true color accurately",
+    compositionRule: "clean still-life arrangement, product is the hero, no person or body unless explicitly requested",
+    cameraRule: "studio product photography, sharp detail, soft shadows, natural texture",
+    textRule: "no generated text; leave negative space only if the brief asks for later typography",
+  },
+  {
+    key: "graphic_collage",
+    label: "Graphic collage",
+    resolution: "1080x1350",
+    aspect: "4:5 editorial graphic frame",
+    hint: "premium editorial collage, refined graphic composition, tasteful contrast and texture",
+    subjectRule: "one concept-led visual system with selected product/style references used deliberately",
+    compositionRule: "layered but readable composition, strong hierarchy, limited elements, clear breathing room",
+    cameraRule: "mix of editorial cutouts, paper texture, product detail, and soft photographic shadows",
+    textRule: "do not generate words; reserve graphic space for designed typography added later",
+  },
+];
+
+const IMAGE_ASSET_TYPES = [
+  { value: "PRODUCT", label: "Product" },
+  { value: "PRODUCT_ON_BODY", label: "Product on body" },
+  { value: "STYLE_REFERENCE", label: "Style reference" },
+  { value: "BANNER_REFERENCE", label: "Banner reference" },
+  { value: "BACKGROUND", label: "Background" },
+  { value: "OTHER", label: "Other" },
+];
+
+const INSPIRATION_SOURCE_TYPES = [
+  { value: "COMPETITOR", label: "Competitor" },
+  { value: "PINTEREST", label: "Pinterest" },
+  { value: "INSTAGRAM", label: "Instagram" },
+  { value: "TIKTOK", label: "TikTok" },
+  { value: "INTERNAL", label: "Internal idea" },
+];
+
+export function DashboardShell({ initialState }: DashboardShellProps) {
+  const [dashboard, setDashboard] = useState(initialState);
+  const [selectedPostId, setSelectedPostId] = useState(
+    initialState.todayPriorities[0]?.id ?? initialState.calendar[0]?.id ?? "",
+  );
+  const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
+  const [flash, setFlash] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [productionPrompt, setProductionPrompt] = useState<{ postId: string; text: string; kind: "image" | "video" } | null>(null);
+  const [activeTab, setActiveTab] = useState<"inputs" | "calendar" | "analytics">("inputs");
+  const [isPending, startTransition] = useTransition();
+  const isBusy = isPending || busyAction !== null;
+
+  const selectedPost =
+    dashboard.calendar.find((post) => post.id === selectedPostId) ?? dashboard.calendar[0] ?? null;
+  const selectedProductionPrompt =
+    productionPrompt?.postId === selectedPost?.id ? productionPrompt.text : null;
+  const selectedProductionBriefKind =
+    productionPrompt?.postId === selectedPost?.id ? productionPrompt.kind : null;
+  const publishedPosts = dashboard.publishedPosts ?? [];
+  const activeImageAssets = (dashboard.imageAssets ?? []).filter((asset) => asset.isActive);
+  const planningPeriod = getPlanningPeriodSummary(dashboard.profile);
+
+  const filteredCalendar = dashboard.calendar.filter((post) => {
+    if (!deferredQuery.trim()) {
+      return true;
+    }
+
+    const haystack = `${post.theme} ${post.goal} ${post.format} ${post.angle} ${post.platform}`.toLowerCase();
+    return haystack.includes(deferredQuery.toLowerCase());
+  });
+
+  async function callJson<T>(url: string, init?: RequestInit) {
+    const response = await fetch(url, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+
+    const payload = (await response.json()) as T & { error?: string; details?: { fieldErrors?: Record<string, string[]> } };
+
+    if (!response.ok) {
+      const fieldErrors = payload.details?.fieldErrors
+        ? Object.entries(payload.details.fieldErrors)
+            .flatMap(([field, messages]) => messages.map((message) => `${field}: ${message}`))
+            .join("; ")
+        : "";
+
+      throw new Error(fieldErrors || payload.error || "Request failed.");
+    }
+
+    return payload;
+  }
+
+  function projectUrl(path: string, projectId = dashboard.activeProject.id) {
+    const separator = path.includes("?") ? "&" : "?";
+    return `${path}${separator}projectId=${projectId}`;
+  }
+
+  function syncDashboard(next: DashboardState, message: string) {
+    startTransition(() => {
+      setDashboard(next);
+      setSelectedPostId((current) =>
+        next.calendar.some((post) => post.id === current) ? current : next.calendar[0]?.id ?? "",
+      );
+      setFlash(message);
+      setError(null);
+    });
+  }
+
+  async function refreshDashboard(message?: string, projectId = dashboard.activeProject.id) {
+    try {
+      const next = await callJson<DashboardState>(projectUrl("/api/dashboard", projectId));
+      syncDashboard(next, message ?? "Dashboard refreshed.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Refresh failed.");
+    }
+  }
+
+  async function handleProfileSubmit(formData: FormData) {
+    const payload: Omit<ProjectProfileDto, "id" | "projectId"> = {
+      brandName: String(formData.get("brandName") ?? ""),
+      audience: String(formData.get("audience") ?? ""),
+      offers: String(formData.get("offers") ?? ""),
+      goals: String(formData.get("goals") ?? ""),
+      contentPillars: String(formData.get("contentPillars") ?? ""),
+      currentPriorities: String(formData.get("currentPriorities") ?? ""),
+      tone: String(formData.get("tone") ?? ""),
+      language: String(formData.get("language") ?? ""),
+      monthlyPostCount: Number(formData.get("monthlyPostCount") ?? 30),
+      monthlyStartDate: String(formData.get("monthlyStartDate") ?? ""),
+      monthlyEndDate: String(formData.get("monthlyEndDate") ?? ""),
+      monthlyCampaignName: String(formData.get("monthlyCampaignName") ?? ""),
+      monthlyPlatformFocus: String(formData.get("monthlyPlatformFocus") ?? "BOTH") as ProjectProfileDto["monthlyPlatformFocus"],
+      monthlyProductFocus: String(formData.get("monthlyProductFocus") ?? ""),
+      monthlyOffers: String(formData.get("monthlyOffers") ?? ""),
+      monthlyPriorities: String(formData.get("monthlyPriorities") ?? ""),
+      monthlyMustInclude: String(formData.get("monthlyMustInclude") ?? ""),
+      monthlyAvoid: String(formData.get("monthlyAvoid") ?? ""),
+      logoReferenceUrl: String(formData.get("logoReferenceUrl") ?? ""),
+      visualFonts: String(formData.get("visualFonts") ?? ""),
+      visualColors: String(formData.get("visualColors") ?? ""),
+      productReferenceUrl: String(formData.get("productReferenceUrl") ?? ""),
+      bannerReferenceUrl: String(formData.get("bannerReferenceUrl") ?? ""),
+      layoutReferenceNotes: String(formData.get("layoutReferenceNotes") ?? ""),
+    };
+
+    try {
+      await callJson<ProjectProfileDto>(projectUrl("/api/profile"), {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      await refreshDashboard("Profile saved.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Profile save failed.");
+    }
+  }
+
+  async function handleProjectCreate(formData: FormData) {
+    const payload: Pick<ProjectDto, "name" | "description"> = {
+      name: String(formData.get("name") ?? ""),
+      description: String(formData.get("description") ?? ""),
+    };
+
+    try {
+      const next = await callJson<DashboardState>("/api/projects", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      syncDashboard(next, "Project created.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Project creation failed.");
+    }
+  }
+
+  async function handleSettingsSubmit(formData: FormData) {
+    const payload: Omit<AppSettingsDto, "id" | "hasOpenAiApiKey" | "imageRenderingConfigured"> = {
+      ollamaModel: String(formData.get("ollamaModel") ?? ""),
+      planTextProvider: String(formData.get("planTextProvider") ?? "OLLAMA") as AppSettingsDto["planTextProvider"],
+      planTextModel: String(formData.get("planTextModel") ?? ""),
+      copyTextProvider: String(formData.get("copyTextProvider") ?? "OLLAMA") as AppSettingsDto["copyTextProvider"],
+      copyTextModel: String(formData.get("copyTextModel") ?? ""),
+      insightsProvider: String(formData.get("insightsProvider") ?? "OLLAMA") as AppSettingsDto["insightsProvider"],
+      insightsModel: String(formData.get("insightsModel") ?? ""),
+      defaultLanguage: String(formData.get("defaultLanguage") ?? ""),
+      brandVoice: String(formData.get("brandVoice") ?? ""),
+      imageProvider: String(formData.get("imageProvider") ?? "LOCAL_SD_WEBUI") as AppSettingsDto["imageProvider"],
+      imageModel: String(formData.get("imageModel") ?? ""),
+      localImageEndpoint: String(formData.get("localImageEndpoint") ?? ""),
+    };
+
+    try {
+      await callJson<AppSettingsDto>("/api/settings", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      await refreshDashboard("Settings saved.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Settings save failed.");
+    }
+  }
+
+  async function runDashboardAction(url: string, message: string, workingMessage = "Working...") {
+    setBusyAction(url);
+    setFlash(workingMessage);
+    setError(null);
+
+    try {
+      const next = await callJson<DashboardState>(url, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      syncDashboard(next, message);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Action failed.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleGenerateMediaBrief() {
+    if (!selectedPost) {
+      return;
+    }
+
+    const kind = isVideoPost(selectedPost) ? "video" : "image";
+    const prompt = kind === "video"
+      ? buildProductionVideoBrief(selectedPost, dashboard.profile, dashboard.imageAssets ?? [])
+      : buildProductionImagePrompt(selectedPost, dashboard.profile, dashboard.imageAssets ?? []);
+    setProductionPrompt({ postId: selectedPost.id, text: prompt, kind });
+    setError(null);
+
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setFlash(kind === "video"
+        ? "Video brief copied. Send it to the creator, editor, or production specialist."
+        : "Image brief copied. Paste it into ChatGPT, Nano Banana, or ComfyUI.");
+    } catch {
+      setFlash(kind === "video" ? "Video brief prepared. Copy it from the field below." : "Image brief prepared. Copy it from the field below.");
+    }
+  }
+
+  async function handlePostIdeaSubmit(formData: FormData) {
+    if (!selectedPost) {
+      return;
+    }
+
+    const payload = {
+      goal: String(formData.get("goal") ?? ""),
+      format: String(formData.get("format") ?? ""),
+      theme: String(formData.get("theme") ?? ""),
+      angle: String(formData.get("angle") ?? ""),
+      visualConcept: String(formData.get("visualConcept") ?? ""),
+      tiktokExecution: String(formData.get("tiktokExecution") ?? ""),
+      instagramExecution: String(formData.get("instagramExecution") ?? ""),
+      assetLinks: String(formData.get("assetLinks") ?? ""),
+      imageFormatKey: String(formData.get("imageFormatKey") ?? "reels_tiktok_cover"),
+      imageResolution: String(formData.get("imageResolution") ?? "1080x1920"),
+      imageStyle: String(formData.get("imageStyle") ?? ""),
+      imageObjects: String(formData.get("imageObjects") ?? ""),
+      imageImpression: String(formData.get("imageImpression") ?? ""),
+      imageReferenceIds: formData.getAll("imageReferenceIds").map((value) => String(value)),
+    };
+
+    try {
+      const next = await callJson<DashboardState>(`/api/posts/${selectedPost.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      setProductionPrompt(null);
+      syncDashboard(next, "Idea saved. Regenerate the packet when you are ready.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Idea save failed.");
+    }
+  }
+
+  async function handleImageAssetSubmit(formData: FormData, assetId?: string) {
+    const payload = {
+      type: String(formData.get("type") ?? "PRODUCT"),
+      name: String(formData.get("name") ?? ""),
+      sourcePath: String(formData.get("sourcePath") ?? ""),
+      description: String(formData.get("description") ?? ""),
+      productCategory: String(formData.get("productCategory") ?? ""),
+      colors: String(formData.get("colors") ?? ""),
+      tags: String(formData.get("tags") ?? ""),
+      notes: String(formData.get("notes") ?? ""),
+      isActive: formData.get("isActive") === "on",
+    };
+
+    try {
+      const next = await callJson<DashboardState>(assetId ? `/api/image-assets/${assetId}` : projectUrl("/api/image-assets"), {
+        method: assetId ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      });
+      syncDashboard(next, assetId ? "Image asset updated." : "Image asset added.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Image asset save failed.");
+    }
+  }
+
+  async function handlePublishedPostSubmit(formData: FormData) {
+    const payload = {
+      platform: String(formData.get("platform") ?? "INSTAGRAM"),
+      postUrl: String(formData.get("postUrl") ?? ""),
+      publishedAt: String(formData.get("publishedAt") ?? format(new Date(), "yyyy-MM-dd")),
+      title: String(formData.get("title") ?? ""),
+      textPreview: String(formData.get("textPreview") ?? ""),
+      imageUrl: String(formData.get("imageUrl") ?? ""),
+      format: String(formData.get("format") ?? ""),
+      views: Number(formData.get("views") ?? 0),
+      reach: Number(formData.get("reach") ?? 0),
+      likes: Number(formData.get("likes") ?? 0),
+      comments: Number(formData.get("comments") ?? 0),
+      shares: Number(formData.get("shares") ?? 0),
+      saves: Number(formData.get("saves") ?? 0),
+      profileVisits: Number(formData.get("profileVisits") ?? 0),
+      followerGain: Number(formData.get("followerGain") ?? 0),
+      leads: Number(formData.get("leads") ?? 0),
+      notes: String(formData.get("notes") ?? ""),
+    };
+
+    try {
+      const next = await callJson<DashboardState>(projectUrl("/api/published-posts"), {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      syncDashboard(next, "Performance snapshot added.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Published post save failed.");
+    }
+  }
+
+  async function handleCompetitorPostSubmit(formData: FormData) {
+    const payload = {
+      sourceType: String(formData.get("sourceType") ?? "COMPETITOR"),
+      competitorName: String(formData.get("competitorName") ?? ""),
+      platform: String(formData.get("platform") ?? "INSTAGRAM"),
+      postUrl: String(formData.get("postUrl") ?? ""),
+      publishedAt: String(formData.get("publishedAt") ?? format(new Date(), "yyyy-MM-dd")),
+      format: String(formData.get("format") ?? ""),
+      theme: String(formData.get("theme") ?? ""),
+      hook: String(formData.get("hook") ?? ""),
+      visualPattern: String(formData.get("visualPattern") ?? ""),
+      offer: String(formData.get("offer") ?? ""),
+      cta: String(formData.get("cta") ?? ""),
+      views: Number(formData.get("views") ?? 0),
+      likes: Number(formData.get("likes") ?? 0),
+      comments: Number(formData.get("comments") ?? 0),
+      shares: Number(formData.get("shares") ?? 0),
+      saves: Number(formData.get("saves") ?? 0),
+      notes: String(formData.get("notes") ?? ""),
+      isActive: formData.get("isActive") === "on",
+    };
+
+    try {
+      const next = await callJson<DashboardState>(projectUrl("/api/competitor-posts"), {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      syncDashboard(next, "Competitor post added to planning source.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Competitor post save failed.");
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(195,222,206,0.32),_transparent_35%),linear-gradient(180deg,_#f7f3ea_0%,_#f3efe6_45%,_#ebe3d5_100%)] text-slate-900">
+      <div className="mx-auto flex min-h-screen max-w-[1680px] flex-col px-4 py-4 sm:px-6 lg:px-8">
+        <header className="border border-black/10 bg-[#f9f5ee]/90 p-5 shadow-[0_24px_80px_rgba(46,40,28,0.08)] backdrop-blur">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Local marketing operating system</p>
+                <h1 className="text-4xl font-semibold tracking-[-0.04em]">{dashboard.profile.brandName}</h1>
+              </div>
+              <p className="max-w-3xl text-sm leading-6 text-slate-600">
+                Plan the selected content period, generate post packets, review outcomes, and keep the next content direction grounded in evidence.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <ActionButton disabled={isBusy} onClick={() => runDashboardAction(projectUrl("/api/plan/generate-month"), `${planningPeriod.count}-day plan regenerated.`, `Generating ${planningPeriod.count}-day plan...`)}>
+                {busyAction?.includes("/api/plan/generate-month") ? "Generating..." : `Create ${planningPeriod.count}-day plan`}
+              </ActionButton>
+              <ActionButton disabled={isBusy} tone="secondary" onClick={() => runDashboardAction(projectUrl("/api/insights/recompute"), "Insights recomputed.", "Recomputing themes...")}>
+                {busyAction?.includes("/api/insights/recompute") ? "Recomputing..." : "Recompute themes"}
+              </ActionButton>
+            </div>
+          </div>
+        </header>
+
+        <nav className="mt-4 grid gap-2 border border-black/10 bg-[#f9f5ee]/75 p-2 sm:grid-cols-3">
+          <TabButton active={activeTab === "inputs"} onClick={() => setActiveTab("inputs")} label="Inputs" />
+          <TabButton active={activeTab === "calendar"} onClick={() => setActiveTab("calendar")} label="Content Calendar" />
+          <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")} label="Analytics" />
+        </nav>
+
+        <div
+          className={cn(
+            "mt-4 flex-1 gap-4",
+            activeTab === "inputs" && "grid",
+            activeTab === "calendar" && "grid xl:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.4fr)]",
+            activeTab === "analytics" && "hidden",
+          )}
+        >
+          <section className={cn(
+            "flex min-h-[70vh] flex-col gap-4 border border-black/10 bg-[#f9f5ee]/85 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]",
+            activeTab !== "inputs" && "hidden",
+          )}>
+            <SectionHeader eyebrow="Planning inputs" title="Monthly plan setup" />
+            <form
+              action={(formData) => startTransition(() => void handleProfileSubmit(formData))}
+              className="space-y-3"
+            >
+              <div className="grid gap-3 border border-black/8 bg-white/45 p-3 md:grid-cols-[150px_170px_170px_minmax(0,1fr)_180px]">
+                <Field label="Days / posts" name="monthlyPostCount" defaultValue={String(dashboard.profile.monthlyPostCount)} type="number" min={1} max={60} />
+                <Field label="Period start" name="monthlyStartDate" defaultValue={dashboard.profile.monthlyStartDate || format(new Date(), "yyyy-MM-dd")} type="date" />
+                <Field label="Period end" name="monthlyEndDate" defaultValue={dashboard.profile.monthlyEndDate} type="date" />
+                <Field label="Campaign / month name" name="monthlyCampaignName" defaultValue={dashboard.profile.monthlyCampaignName} />
+                <SelectField label="Platform focus" name="monthlyPlatformFocus" defaultValue={dashboard.profile.monthlyPlatformFocus} options={PLATFORM_OPTIONS} />
+              </div>
+              <p className="text-sm leading-6 text-slate-600">
+                Current generation period: {planningPeriod.label}. If Period end is filled, it defines the number of days; otherwise the app uses Period start plus Days / posts.
+              </p>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field label="Main product / product group" name="monthlyProductFocus" defaultValue={dashboard.profile.monthlyProductFocus} textarea />
+                <Field label="Monthly offers" name="monthlyOffers" defaultValue={dashboard.profile.monthlyOffers} textarea />
+                <Field label="Monthly priorities" name="monthlyPriorities" defaultValue={dashboard.profile.monthlyPriorities} textarea />
+                <Field label="Must include this month" name="monthlyMustInclude" defaultValue={dashboard.profile.monthlyMustInclude} textarea />
+              </div>
+              <Field label="Avoid this month" name="monthlyAvoid" defaultValue={dashboard.profile.monthlyAvoid} textarea />
+
+              <details className="border border-black/8 bg-white/35 p-3">
+                <summary className="cursor-pointer text-sm font-medium tracking-[-0.02em] text-slate-800">Strategy context used by the generator</summary>
+                <div className="mt-4 grid gap-3">
+                  <Field label="Brand name" name="brandName" defaultValue={dashboard.profile.brandName} />
+                  <Field label="Audience" name="audience" defaultValue={dashboard.profile.audience} textarea />
+                  <Field label="Always-on offers" name="offers" defaultValue={dashboard.profile.offers} textarea />
+                  <Field label="Goals" name="goals" defaultValue={dashboard.profile.goals} textarea />
+                  <Field label="Content pillars" name="contentPillars" defaultValue={dashboard.profile.contentPillars} textarea />
+                  <Field label="Current priorities" name="currentPriorities" defaultValue={dashboard.profile.currentPriorities} textarea />
+                  <Field label="Tone" name="tone" defaultValue={dashboard.profile.tone} textarea />
+                  <Field label="Language" name="language" defaultValue={dashboard.profile.language} />
+                </div>
+              </details>
+
+              <div className="border-t border-black/8 pt-4">
+                <SectionHeader eyebrow="Brand assets" title="Visual identity" />
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <Field label="Logo link or local path" name="logoReferenceUrl" defaultValue={dashboard.profile.logoReferenceUrl} />
+                  <Field label="Product folder or reference file" name="productReferenceUrl" defaultValue={dashboard.profile.productReferenceUrl} />
+                  <Field label="Fonts / typography" name="visualFonts" defaultValue={dashboard.profile.visualFonts} textarea />
+                  <Field label="Colors / palette" name="visualColors" defaultValue={dashboard.profile.visualColors} textarea />
+                  <Field label="Banner / layout reference folder or file" name="bannerReferenceUrl" defaultValue={dashboard.profile.bannerReferenceUrl} />
+                  <Field label="Visual style notes" name="layoutReferenceNotes" defaultValue={dashboard.profile.layoutReferenceNotes} textarea />
+                </div>
+              </div>
+              <ActionButton type="submit" disabled={isBusy}>
+                Save planning inputs
+              </ActionButton>
+            </form>
+
+            <div className="border-t border-black/8 pt-4">
+              <SectionHeader eyebrow="Inspiration inbox" title="Posts and ideas to repeat" />
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Add competitor, Pinterest, Instagram, TikTok, or internal ideas here. The planner will score and reuse the best mechanics first, then fill the rest with ILARIA-original funnel and pillar ideas.
+              </p>
+              <form
+                action={(formData) => startTransition(() => void handleCompetitorPostSubmit(formData))}
+                className="mt-4 grid gap-3 border border-black/8 bg-white/45 p-3"
+              >
+                <div className="grid gap-3 md:grid-cols-[170px_180px_160px_minmax(0,1fr)_160px]">
+                  <SelectField label="Source type" name="sourceType" defaultValue="COMPETITOR" options={INSPIRATION_SOURCE_TYPES} />
+                  <Field label="Source name" name="competitorName" defaultValue="" />
+                  <SelectField label="Platform" name="platform" defaultValue="INSTAGRAM" options={PLATFORM_OPTIONS} />
+                  <Field label="Post URL" name="postUrl" defaultValue="" />
+                  <Field label="Published" name="publishedAt" defaultValue={format(new Date(), "yyyy-MM-dd")} type="date" />
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Field label="Format" name="format" defaultValue="" />
+                  <Field label="Theme" name="theme" defaultValue="" />
+                  <Field label="Offer" name="offer" defaultValue="" />
+                </div>
+                <Field label="Hook" name="hook" defaultValue="" textarea />
+                <Field label="Visual pattern" name="visualPattern" defaultValue="" textarea />
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_repeat(5,100px)]">
+                  <Field label="CTA" name="cta" defaultValue="" />
+                  <Field label="Views" name="views" defaultValue="0" type="number" min={0} />
+                  <Field label="Likes" name="likes" defaultValue="0" type="number" min={0} />
+                  <Field label="Comments" name="comments" defaultValue="0" type="number" min={0} />
+                  <Field label="Shares" name="shares" defaultValue="0" type="number" min={0} />
+                  <Field label="Saves" name="saves" defaultValue="0" type="number" min={0} />
+                </div>
+                <Field label="Notes / why it worked" name="notes" defaultValue="" textarea />
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input name="isActive" type="checkbox" defaultChecked className="h-4 w-4 accent-slate-900" />
+                  Active in content planning
+                </label>
+                <ActionButton type="submit" tone="secondary" disabled={isBusy}>
+                  Add inspiration
+                </ActionButton>
+              </form>
+              <CompetitorPostTable posts={dashboard.competitorPosts} />
+            </div>
+
+            <details className="border-t border-black/8 pt-4">
+              <summary className="cursor-pointer text-sm font-medium uppercase tracking-[0.18em] text-slate-500">Optional visual reference catalog</summary>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Use this only when you have concrete product photos, product-on-body examples, banner layouts, or social reference links that should be selectable inside image briefs.
+              </p>
+              <form
+                action={(formData) => startTransition(() => void handleImageAssetSubmit(formData))}
+                className="mt-4 grid gap-3 border border-black/8 bg-white/45 p-3"
+              >
+                <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)]">
+                  <SelectField label="Type" name="type" defaultValue="STYLE_REFERENCE" options={IMAGE_ASSET_TYPES} />
+                  <Field label="Name" name="name" defaultValue="" />
+                  <Field label="Link, social URL, or local path" name="sourcePath" defaultValue="" />
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Field label="Product category" name="productCategory" defaultValue="" />
+                  <Field label="Colors" name="colors" defaultValue="" />
+                  <Field label="Tags" name="tags" defaultValue="" />
+                </div>
+                <Field label="Description" name="description" defaultValue="" textarea />
+                <Field label="Notes" name="notes" defaultValue="" textarea />
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input name="isActive" type="checkbox" defaultChecked className="h-4 w-4 accent-slate-900" />
+                  Active in prompt picker
+                </label>
+                <ActionButton type="submit" tone="secondary" disabled={isBusy}>
+                  Add asset
+                </ActionButton>
+              </form>
+
+              <div className="mt-4 grid gap-3">
+                {dashboard.imageAssets.length ? (
+                  dashboard.imageAssets.map((asset) => (
+                    <ImageAssetEditor
+                      key={asset.id}
+                      asset={asset}
+                      isBusy={isBusy}
+                      onSubmit={(formData) => startTransition(() => void handleImageAssetSubmit(formData, asset.id))}
+                    />
+                  ))
+                ) : (
+                  <p className="border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+                    Add product photos, product-on-body references, banner layouts, or style references as URLs or local paths.
+                  </p>
+                )}
+              </div>
+            </details>
+
+            <details className="border-t border-black/8 pt-4">
+              <summary className="cursor-pointer text-sm font-medium uppercase tracking-[0.18em] text-slate-500">Advanced / developer settings</summary>
+              <div className="mt-4 grid gap-4">
+                <div className="grid gap-3 border border-black/8 bg-white/45 p-3 md:grid-cols-[280px_minmax(0,1fr)]">
+                  <SelectField
+                    key={dashboard.activeProject.id}
+                    label="Project"
+                    name="activeProject"
+                    defaultValue={String(dashboard.activeProject.id)}
+                    options={dashboard.projects.map((project) => ({
+                      value: String(project.id),
+                      label: project.name,
+                    }))}
+                    onChange={(value) => void refreshDashboard(`Switched to ${dashboard.projects.find((project) => String(project.id) === value)?.name ?? "project"}.`, Number(value))}
+                  />
+                  {dashboard.activeProject.description ? (
+                    <p className="self-end pb-2 text-sm leading-6 text-slate-600">{dashboard.activeProject.description}</p>
+                  ) : null}
+                </div>
+
+                <div className="border border-black/8 bg-white/45 p-3">
+                  <SectionHeader eyebrow="Projects" title="Create workspace" />
+                  <form
+                    action={(formData) => startTransition(() => void handleProjectCreate(formData))}
+                    className="mt-4 space-y-3"
+                  >
+                    <Field label="Project name" name="name" defaultValue="" />
+                    <Field label="Description" name="description" defaultValue="" textarea />
+                    <ActionButton type="submit" tone="secondary" disabled={isBusy}>
+                      Add project
+                    </ActionButton>
+                  </form>
+                </div>
+
+                <div className="border border-black/8 bg-white/45 p-3">
+                  <SectionHeader eyebrow="Runtime" title="Local settings" />
+                  <form
+                    action={(formData) => startTransition(() => void handleSettingsSubmit(formData))}
+                    className="mt-4 space-y-3"
+                  >
+                    <Field label="Ollama model" name="ollamaModel" defaultValue={dashboard.settings.ollamaModel} />
+                    <ModelRouteFields
+                      title="Content plan"
+                      providerName="planTextProvider"
+                      modelName="planTextModel"
+                      providerValue={dashboard.settings.planTextProvider}
+                      modelValue={dashboard.settings.planTextModel}
+                    />
+                    <ModelRouteFields
+                      title="Post copy"
+                      providerName="copyTextProvider"
+                      modelName="copyTextModel"
+                      providerValue={dashboard.settings.copyTextProvider}
+                      modelValue={dashboard.settings.copyTextModel}
+                    />
+                    <ModelRouteFields
+                      title="Analytics insights"
+                      providerName="insightsProvider"
+                      modelName="insightsModel"
+                      providerValue={dashboard.settings.insightsProvider}
+                      modelValue={dashboard.settings.insightsModel}
+                    />
+                    <Field label="Default language" name="defaultLanguage" defaultValue={dashboard.settings.defaultLanguage} />
+                    <Field label="Brand voice" name="brandVoice" defaultValue={dashboard.settings.brandVoice} textarea />
+                    <SelectField
+                      label="Image provider"
+                      name="imageProvider"
+                      defaultValue={dashboard.settings.imageProvider}
+                      options={[
+                        { value: "LOCAL_SD_WEBUI", label: "Local generator (draft)" },
+                        { value: "OPENAI", label: "OpenAI images" },
+                      ]}
+                    />
+                    <Field label="Image model" name="imageModel" defaultValue={dashboard.settings.imageModel} />
+                    <Field label="Local image endpoint" name="localImageEndpoint" defaultValue={dashboard.settings.localImageEndpoint} />
+                    <div className="rounded-sm border border-black/8 bg-white/55 p-3 text-xs leading-5 text-slate-600">
+                      Local rendering is treated as a draft preview unless it points to a production ComfyUI, FLUX, or SDXL workflow. Use the production prompt for final social-ready images.
+                    </div>
+                    <ActionButton type="submit" tone="secondary" disabled={isBusy}>
+                      Save settings
+                    </ActionButton>
+                  </form>
+                </div>
+              </div>
+            </details>
+          </section>
+
+          <section className={cn(
+            "flex min-h-[70vh] flex-col border border-black/10 bg-[#fcfaf5]/88 shadow-[0_18px_60px_rgba(46,40,28,0.06)] xl:max-h-[calc(100vh-13rem)]",
+            activeTab !== "calendar" && "hidden",
+          )}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/8 px-4 py-4">
+              <div>
+                <SectionHeader eyebrow="Calendar" title={`${planningPeriod.count}-day content view`} />
+              </div>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                aria-label="Filter content calendar"
+                className="w-full max-w-xs border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-slate-900"
+                placeholder="Filter by theme, goal, or angle"
+              />
+            </div>
+            <div className="flex-1 overflow-auto px-2 py-2 [content-visibility:auto]">
+              {filteredCalendar.length ? (
+                filteredCalendar.map((post) => (
+                  <button
+                    key={post.id}
+                    type="button"
+                    onClick={() => setSelectedPostId(post.id)}
+                    className={cn(
+                      "grid w-full grid-cols-[92px_minmax(0,1fr)_84px] gap-3 border-b border-black/6 px-3 py-3 text-left transition-colors hover:bg-black/[0.03]",
+                      selectedPost?.id === post.id && "bg-[#e9eadf]",
+                    )}
+                  >
+                    <div className="text-xs uppercase tracking-[0.16em] text-slate-500">
+                      <p>{format(new Date(post.plannedDate), "MMM d")}</p>
+                      <p className="mt-1">{labelPlatform(post.platform)}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-medium tracking-[-0.02em]">{post.theme}</p>
+                      <p className="truncate text-sm text-slate-600">{post.format} · {post.goal}</p>
+                      <p className="mt-1 line-clamp-2 text-sm text-slate-500">{post.angle}</p>
+                    </div>
+                    <div className="text-right text-xs uppercase tracking-[0.16em] text-slate-500">
+                      <p>{STATUS_LABELS[post.status]}</p>
+                      {post.review ? <p className="mt-1">{AUTO_CLASS_LABELS[post.review.autoClass]}</p> : null}
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="p-6 text-sm text-slate-600">No posts match this filter yet.</div>
+              )}
+            </div>
+          </section>
+
+          <section className={cn(
+            "flex min-h-[70vh] flex-col gap-4 overflow-auto border border-black/10 bg-[#f7f4ed]/88 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)] xl:max-h-[calc(100vh-13rem)]",
+            activeTab !== "calendar" && "hidden",
+          )}>
+            <SectionHeader eyebrow="Workspace" title={selectedPost ? selectedPost.theme : "Select a post"} />
+
+            {selectedPost ? (
+              <>
+                <div className="space-y-2 border-b border-black/8 pb-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{labelPlatform(selectedPost.platform)}</p>
+                      <p className="text-lg font-medium tracking-[-0.03em]">{selectedPost.format} · {selectedPost.goal}</p>
+                    </div>
+                    <span className="text-xs uppercase tracking-[0.22em] text-slate-500">
+                      {format(new Date(selectedPost.plannedDate), "MMM d")}
+                    </span>
+                  </div>
+                  <form
+                    key={`${selectedPost.id}-${selectedPost.theme}-${selectedPost.angle}-${selectedPost.visualConcept}-${selectedPost.imageFormatKey}`}
+                    action={(formData) => startTransition(() => void handlePostIdeaSubmit(formData))}
+                    className="grid gap-3 border-t border-black/6 pt-3"
+                  >
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="Topic" name="theme" defaultValue={selectedPost.theme} />
+                      <Field label="Goal" name="goal" defaultValue={selectedPost.goal} />
+                      <Field label="Format" name="format" defaultValue={selectedPost.format} />
+                      <Field label="Core idea" name="angle" defaultValue={selectedPost.angle} textarea />
+                      <Field label="Visual direction" name="visualConcept" defaultValue={selectedPost.visualConcept} textarea />
+                      <Field label="TikTok version" name="tiktokExecution" defaultValue={selectedPost.tiktokExecution} textarea />
+                      <Field label="Instagram version" name="instagramExecution" defaultValue={selectedPost.instagramExecution} textarea />
+                      <Field label="Prepared image / video links, files, or folders" name="assetLinks" defaultValue={selectedPost.assetLinks} textarea />
+                    </div>
+                    <div className="grid gap-3 border border-black/8 bg-white/45 p-3">
+                      <SectionHeader
+                        eyebrow={isVideoPost(selectedPost) ? "Media brief" : "Image brief"}
+                        title={isVideoPost(selectedPost) ? "Cover image inputs and visual references" : "External generation brief"}
+                      />
+                      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
+                        <label className="grid gap-2 text-sm text-slate-700">
+                          <span className="text-xs uppercase tracking-[0.2em] text-slate-500">Template</span>
+                          <select
+                            name="imageFormatKey"
+                            defaultValue={selectedPost.imageFormatKey || "reels_tiktok_cover"}
+                            onChange={(event) => {
+                              const template = IMAGE_FORMAT_TEMPLATES.find((item) => item.key === event.currentTarget.value);
+                              const resolutionInput = event.currentTarget.form?.elements.namedItem("imageResolution");
+
+                              if (template && resolutionInput instanceof HTMLInputElement) {
+                                resolutionInput.value = template.resolution;
+                              }
+                            }}
+                            className="border border-black/10 bg-white/85 px-3 py-2 outline-none focus:border-slate-900"
+                          >
+                            {IMAGE_FORMAT_TEMPLATES.map((template) => (
+                              <option key={template.key} value={template.key}>
+                                {template.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <Field
+                          label="Resolution"
+                          name="imageResolution"
+                          defaultValue={selectedPost.imageResolution || getImageTemplate(selectedPost.imageFormatKey).resolution}
+                        />
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Field
+                          label="Main style"
+                          name="imageStyle"
+                          defaultValue={selectedPost.imageStyle || getImageTemplate(selectedPost.imageFormatKey).hint}
+                          textarea
+                        />
+                        <Field
+                          label="Important objects"
+                          name="imageObjects"
+                          defaultValue={selectedPost.imageObjects || ""}
+                          textarea
+                        />
+                      </div>
+                      <Field
+                        label="General impression"
+                        name="imageImpression"
+                        defaultValue={selectedPost.imageImpression || "tasteful, modern, sensual but not explicit, social-ready, clear first-frame impact"}
+                        textarea
+                      />
+                      <ImageReferencePicker
+                        assets={activeImageAssets}
+                        selectedIds={selectedPost.imageReferenceIds}
+                      />
+                    </div>
+                    <ActionButton type="submit" tone="secondary" disabled={isBusy}>
+                      Save idea
+                    </ActionButton>
+                  </form>
+                  <div className="flex flex-wrap gap-2">
+                    <ActionButton disabled={isBusy} onClick={() => runDashboardAction(`/api/posts/${selectedPost.id}/generate-packet`, "Campaign packet generated.", "Generating campaign packet...")}>
+                      {busyAction?.includes(`/api/posts/${selectedPost.id}/generate-packet`)
+                        ? "Generating..."
+                        : selectedPost.packet
+                          ? "Regenerate packet"
+                          : "Generate packet"}
+                    </ActionButton>
+                    <ActionButton disabled={isBusy} tone="secondary" onClick={() => void handleGenerateMediaBrief()}>
+                      <Copy size={15} />
+                      {isVideoPost(selectedPost) ? "Generate video brief" : "Generate image brief"}
+                    </ActionButton>
+                  </div>
+                  {selectedProductionPrompt ? (
+                    <div className="grid gap-2 border border-black/8 bg-white/55 p-3">
+                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-slate-500">
+                        <Copy size={14} />
+                        {selectedProductionBriefKind === "video" ? "Video production brief" : "Compact image brief"}
+                      </div>
+                      <textarea
+                        readOnly
+                        value={selectedProductionPrompt}
+                        rows={10}
+                        className="resize-y border border-black/10 bg-white/90 px-3 py-2 font-mono text-xs leading-5 text-slate-700 outline-none"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+
+                {selectedPost.packet ? (
+                  <div className="space-y-4">
+                    <TextBlock title="Objective" body={selectedPost.packet.objective} />
+                    <TextBlock title="Core angle" body={selectedPost.packet.coreAngle} />
+                    <PacketSection title="Hooks" items={selectedPost.packet.hookVariants} />
+                    <PacketSection title="Captions" items={selectedPost.packet.captionVariants} />
+                    <PacketSection title="CTAs" items={selectedPost.packet.ctaVariants} />
+                    <PacketSection title="Hashtags" items={selectedPost.packet.hashtagSet} inline />
+                    <TextBlock title="Visual brief" body={selectedPost.packet.visualBrief} />
+                    <PacketSection title="Image prompts" items={selectedPost.packet.imagePromptVariants} />
+                    <PacketSection title="Review checklist" items={selectedPost.packet.reviewChecklist} />
+
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-slate-500">
+                        <ImageIcon size={14} />
+                        Visual references
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {selectedPost.images.length ? (
+                          selectedPost.images.map((image) => (
+                            <VisualReferenceCard key={image.id} image={image} theme={selectedPost.theme} />
+                          ))
+                        ) : (
+                          <p className="text-sm text-slate-600">Visual references will appear here after generating the packet.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-sm border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+                    Generate a campaign packet to populate copy, prompts, and the review checklist.
+                  </div>
+                )}
+
+                <div className="border-t border-black/8 pt-4">
+                  <SectionHeader eyebrow="Post assets" title="Generated media and external links" />
+                  <div className="mt-3">
+                    <AssetLinks value={selectedPost.assetLinks} />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-sm border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+                Generate a month of posts and select one to start building assets.
+              </div>
+            )}
+          </section>
+        </div>
+
+        {activeTab === "analytics" ? (
+          <section className="mt-4 grid gap-4">
+            <div className="border border-black/10 bg-[#f9f5ee]/88 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]">
+              <SectionHeader eyebrow="Published posts" title="Add performance snapshot" />
+              <form
+                action={(formData) => startTransition(() => void handlePublishedPostSubmit(formData))}
+                className="mt-4 grid gap-3"
+              >
+                <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)_180px_160px]">
+                  <SelectField
+                    label="Platform"
+                    name="platform"
+                    defaultValue="INSTAGRAM"
+                    options={[
+                      { value: "INSTAGRAM", label: "Instagram" },
+                      { value: "TIKTOK", label: "TikTok" },
+                    ]}
+                  />
+                  <Field label="Post link" name="postUrl" defaultValue="" />
+                  <Field label="Published date" name="publishedAt" defaultValue={format(new Date(), "yyyy-MM-dd")} type="date" />
+                  <Field label="Format" name="format" defaultValue="" />
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Field label="Title override" name="title" defaultValue="" />
+                  <Field label="Preview image URL override" name="imageUrl" defaultValue="" />
+                  <Field label="Text preview override" name="textPreview" defaultValue="" textarea />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                  <Field label="Views" name="views" defaultValue="0" type="number" min={0} step={1} />
+                  <Field label="Reach" name="reach" defaultValue="0" type="number" min={0} step={1} />
+                  <Field label="Likes" name="likes" defaultValue="0" type="number" min={0} step={1} />
+                  <Field label="Comments" name="comments" defaultValue="0" type="number" min={0} step={1} />
+                  <Field label="Shares" name="shares" defaultValue="0" type="number" min={0} step={1} />
+                  <Field label="Saves" name="saves" defaultValue="0" type="number" min={0} step={1} />
+                  <Field label="Profile visits" name="profileVisits" defaultValue="0" type="number" min={0} step={1} />
+                  <Field label="Follower gain" name="followerGain" defaultValue="0" type="number" min={0} step={1} />
+                  <Field label="Leads / clicks" name="leads" defaultValue="0" type="number" min={0} step={1} />
+                  <Field label="Notes" name="notes" defaultValue="" />
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <ActionButton type="submit" disabled={isBusy}>
+                    {isBusy ? "Saving..." : "Add snapshot"}
+                  </ActionButton>
+                  <p className="text-sm leading-6 text-slate-600">
+                    Add the same post again later to create a new history line. The parser pulls public preview text and image when the platform allows it; metrics stay editable.
+                  </p>
+                </div>
+              </form>
+            </div>
+
+            <div className="border border-black/10 bg-[#fcfaf5]/88 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <SectionHeader eyebrow="Performance history" title="All published post snapshots" />
+                <span className="text-xs uppercase tracking-[0.18em] text-slate-500">{publishedPosts.length} rows</span>
+              </div>
+              <PublishedPostHistoryTable posts={publishedPosts} />
+            </div>
+
+            <div className="border border-black/10 bg-[#f9f5ee]/88 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <SectionHeader eyebrow="Recommendations" title="What to make next" />
+                <ActionButton disabled={isBusy} tone="secondary" onClick={() => runDashboardAction(projectUrl("/api/insights/recompute"), "Insights recomputed.", "Recomputing recommendations...")}>
+                  {busyAction?.includes("/api/insights/recompute") ? "Recomputing..." : "Recompute recommendations"}
+                </ActionButton>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {dashboard.suggestedThemes.length ? (
+                  dashboard.suggestedThemes.map((item) => (
+                    <div key={item.id} className="border border-black/8 bg-white/55 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium tracking-[-0.02em]">{item.theme}</p>
+                        <span className="text-xs uppercase tracking-[0.18em] text-slate-500">{labelPlatform(item.platform)}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-600">{item.goal}</p>
+                      <p className="mt-3 text-sm leading-6 text-slate-700">{item.reason}</p>
+                      <p className="mt-3 text-sm leading-6 text-slate-500">{item.suggestedNextAngle}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-600">Add published post snapshots, then recompute recommendations.</p>
+                )}
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 border border-black/10 bg-[#f9f5ee]/85 px-4 py-3 text-sm text-slate-600">
+          <p>{flash ?? "Ready."}</p>
+          <p className={cn(error ? "text-red-600" : "text-slate-500")}>{error ?? "Local data stays on this workstation."}</p>
+        </footer>
+      </div>
+    </main>
+  );
+}
+
+function TabButton({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "border px-4 py-3 text-sm font-medium transition-colors",
+        active
+          ? "border-slate-900 bg-slate-900 text-white"
+          : "border-black/8 bg-white/60 text-slate-700 hover:bg-white",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function AssetLinks({ value }: { value: string }) {
+  const items = splitAssetLines(value);
+
+  if (!items.length) {
+    return (
+      <div className="rounded-sm border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+        Add generated image URLs, video links, Drive links, or production storage links in the post idea form above.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-2">
+      {items.map((item, index) => (
+        isUrl(item) ? (
+          <a
+            key={`${item}-${index}`}
+            href={item}
+            target="_blank"
+            rel="noreferrer"
+            className="break-all border border-black/8 bg-white/65 p-3 text-sm leading-6 text-slate-700 hover:bg-white"
+          >
+            {item}
+          </a>
+        ) : (
+          <p key={`${item}-${index}`} className="border border-black/8 bg-white/65 p-3 text-sm leading-6 text-slate-700">
+            {item}
+          </p>
+        )
+      ))}
+    </div>
+  );
+}
+
+function ImageAssetEditor({
+  asset,
+  isBusy,
+  onSubmit,
+}: {
+  asset: ImageAssetDto;
+  isBusy: boolean;
+  onSubmit: (formData: FormData) => void;
+}) {
+  return (
+    <form action={onSubmit} className="grid gap-3 border border-black/8 bg-white/55 p-3">
+      <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)]">
+        <SelectField label="Type" name="type" defaultValue={asset.type} options={IMAGE_ASSET_TYPES} />
+        <Field label="Name" name="name" defaultValue={asset.name} />
+        <Field label="Link, social URL, or local path" name="sourcePath" defaultValue={asset.sourcePath} />
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <Field label="Product category" name="productCategory" defaultValue={asset.productCategory} />
+        <Field label="Colors" name="colors" defaultValue={asset.colors} />
+        <Field label="Tags" name="tags" defaultValue={asset.tags} />
+      </div>
+      <Field label="Description" name="description" defaultValue={asset.description} textarea />
+      <Field label="Notes" name="notes" defaultValue={asset.notes} textarea />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input name="isActive" type="checkbox" defaultChecked={asset.isActive} className="h-4 w-4 accent-slate-900" />
+          Active in prompt picker
+        </label>
+        <ActionButton type="submit" tone="secondary" disabled={isBusy}>
+          Update asset
+        </ActionButton>
+      </div>
+    </form>
+  );
+}
+
+function VisualReferenceCard({
+  image,
+  theme,
+}: {
+  image: ContentPostDto["images"][number];
+  theme: string;
+}) {
+  const canPreview = canRenderVisualReferenceImage(image.imagePath);
+
+  return (
+    <figure className="space-y-2">
+      <div className="relative aspect-square overflow-hidden bg-black/5">
+        {canPreview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image.imagePath}
+            alt={`Visual reference ${image.variant} for ${theme}`}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full flex-col justify-between bg-[#ede7dc] p-4 text-slate-800">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+              <ArrowUpRight size={14} />
+              Social reference
+            </div>
+            <p className="text-lg font-medium tracking-[-0.03em]">Open source post for visual direction</p>
+            <p className="break-all text-xs leading-5 text-slate-500">{image.imagePath}</p>
+          </div>
+        )}
+      </div>
+      <figcaption className="space-y-1 text-xs leading-5 text-slate-500">
+        <p>{image.prompt}</p>
+        <a
+          href={image.imagePath}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-slate-900 underline decoration-black/25 underline-offset-2"
+        >
+          Open reference
+          <ArrowUpRight size={12} />
+        </a>
+      </figcaption>
+    </figure>
+  );
+}
+
+function CompetitorPostTable({ posts }: { posts: CompetitorPostDto[] }) {
+  if (!posts.length) {
+    return (
+      <p className="mt-4 border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+        Add competitor, Pinterest, Instagram, TikTok, or internal inspiration links to activate the inspiration-based planning flow.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-4 overflow-x-auto [content-visibility:auto]">
+      <table className="min-w-[1120px] w-full border-collapse text-left text-sm">
+        <thead className="border-y border-black/10 bg-white/50 text-xs uppercase tracking-[0.18em] text-slate-500">
+          <tr>
+            <th className="px-3 py-3 font-medium">Source</th>
+            <th className="px-3 py-3 font-medium">Name</th>
+            <th className="px-3 py-3 font-medium">Platform</th>
+            <th className="px-3 py-3 font-medium">Published</th>
+            <th className="px-3 py-3 font-medium">Relative</th>
+            <th className="px-3 py-3 font-medium">Format</th>
+            <th className="px-3 py-3 font-medium">Hook / Pattern</th>
+            <th className="px-3 py-3 font-medium">Metrics</th>
+            <th className="px-3 py-3 font-medium">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          {posts.slice(0, 12).map((post) => (
+            <tr key={post.id} className="border-b border-black/6 align-top">
+              <td className="px-3 py-3 text-slate-600">{labelInspirationSource(post.sourceType)}</td>
+              <td className="px-3 py-3 font-medium text-slate-900">{post.competitorName}</td>
+              <td className="px-3 py-3 text-slate-600">{labelPlatform(post.platform)}</td>
+              <td className="px-3 py-3 text-slate-600">{format(new Date(post.publishedAt), "MMM d")}</td>
+              <td className="px-3 py-3 text-slate-600">{post.relativeScore.toFixed(2)}x</td>
+              <td className="px-3 py-3 text-slate-600">{post.format || "Unknown"}</td>
+              <td className="px-3 py-3 text-slate-600">
+                <p className="font-medium text-slate-800">{post.hook || post.theme || "Untitled pattern"}</p>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{post.visualPattern || post.notes}</p>
+              </td>
+              <td className="px-3 py-3 text-xs leading-5 text-slate-500">
+                {post.views} views · {post.likes} likes · {post.comments} comments · {post.saves} saves
+              </td>
+              <td className="px-3 py-3">
+                <a
+                  href={post.postUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-slate-900 underline decoration-black/25 underline-offset-2"
+                >
+                  Open
+                  <ArrowUpRight size={12} />
+                </a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function canRenderVisualReferenceImage(path: string) {
+  const value = path.toLowerCase().split("?")[0];
+
+  return (
+    value.startsWith("http://") ||
+    value.startsWith("https://") ||
+    value.startsWith("/") ||
+    value.startsWith("data:image/")
+  ) && (
+    value.includes("images.unsplash.com") ||
+    /\.(avif|gif|jpeg|jpg|png|webp)$/i.test(value)
+  );
+}
+
+function ImageReferencePicker({
+  assets,
+  selectedIds,
+}: {
+  assets: ImageAssetDto[];
+  selectedIds: string[];
+}) {
+  if (!assets.length) {
+    return (
+      <p className="border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+        Add image assets in Inputs to attach product, banner, or style references to this brief.
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid gap-2">
+      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Selected references</p>
+      <div className="grid gap-2 md:grid-cols-2">
+        {assets.map((asset) => (
+          <label key={asset.id} className="grid gap-1 border border-black/8 bg-white/65 p-3 text-sm text-slate-700">
+            <span className="flex items-start gap-2">
+              <input
+                name="imageReferenceIds"
+                type="checkbox"
+                value={asset.id}
+                defaultChecked={selectedIds.includes(asset.id)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-slate-900"
+              />
+              <span className="min-w-0">
+                <span className="block font-medium tracking-[-0.02em] text-slate-900">{asset.name}</span>
+                <span className="block text-xs uppercase tracking-[0.16em] text-slate-500">{labelImageAssetType(asset.type)}</span>
+              </span>
+            </span>
+            <span className="break-all text-xs leading-5 text-slate-500">{asset.sourcePath}</span>
+            <span className="text-xs leading-5 text-slate-500">{referenceUsageHint(asset.type)}</span>
+            {asset.tags ? <span className="text-xs leading-5 text-slate-500">{asset.tags}</span> : null}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function referenceUsageHint(type: ImageAssetDto["type"]) {
+  if (type === "PRODUCT" || type === "PRODUCT_ON_BODY") {
+    return "Used as product truth.";
+  }
+
+  if (type === "STYLE_REFERENCE" || type === "BACKGROUND") {
+    return "Used for mood, light, color, and texture only.";
+  }
+
+  if (type === "BANNER_REFERENCE") {
+    return "Used for layout and composition only.";
+  }
+
+  return "Used as supporting context.";
+}
+
+function PublishedPostHistoryTable({ posts }: { posts: PublishedPostDto[] }) {
+  if (!posts.length) {
+    return (
+      <p className="mt-4 border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+        Add a TikTok or Instagram post link above to start building the performance history.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-4 overflow-x-auto [content-visibility:auto]">
+      <table className="min-w-[1180px] w-full border-collapse text-left text-sm">
+        <thead className="border-y border-black/10 bg-white/50 text-xs uppercase tracking-[0.18em] text-slate-500">
+          <tr>
+            <th className="px-3 py-3 font-medium">Captured</th>
+            <th className="px-3 py-3 font-medium">Published</th>
+            <th className="px-3 py-3 font-medium">Platform</th>
+            <th className="px-3 py-3 font-medium">Preview</th>
+            <th className="px-3 py-3 font-medium">Text</th>
+            <th className="px-3 py-3 font-medium">Format</th>
+            <th className="px-3 py-3 font-medium">Views</th>
+            <th className="px-3 py-3 font-medium">Reach</th>
+            <th className="px-3 py-3 font-medium">Likes</th>
+            <th className="px-3 py-3 font-medium">Comments</th>
+            <th className="px-3 py-3 font-medium">Shares</th>
+            <th className="px-3 py-3 font-medium">Saves</th>
+            <th className="px-3 py-3 font-medium">Visits</th>
+            <th className="px-3 py-3 font-medium">Follows</th>
+            <th className="px-3 py-3 font-medium">Leads</th>
+          </tr>
+        </thead>
+        <tbody>
+          {posts.map((post) => (
+            <tr key={post.id} className="border-b border-black/6 align-top">
+              <td className="px-3 py-3 text-slate-600">{format(new Date(post.capturedAt), "MMM d, HH:mm")}</td>
+              <td className="px-3 py-3 text-slate-600">{format(new Date(post.publishedAt), "MMM d, yyyy")}</td>
+              <td className="px-3 py-3 text-slate-600">{labelPlatform(post.platform)}</td>
+              <td className="px-3 py-3">
+                <a
+                  href={post.postUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block h-20 w-16 bg-black/5 bg-cover bg-center"
+                  style={post.imageUrl ? { backgroundImage: `url("${post.imageUrl}")` } : undefined}
+                  aria-label={`Open ${post.platform} post`}
+                >
+                  {!post.imageUrl ? (
+                    <span className="flex h-full items-center justify-center px-2 text-center text-[10px] uppercase tracking-[0.12em] text-slate-400">
+                      No image
+                    </span>
+                  ) : null}
+                </a>
+              </td>
+              <td className="max-w-xs px-3 py-3">
+                <a
+                  href={post.postUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block font-medium tracking-[-0.02em] text-slate-900 hover:underline"
+                >
+                  {post.title || post.postUrl}
+                </a>
+                {post.textPreview ? (
+                  <p className="mt-1 line-clamp-2 leading-6 text-slate-600">{post.textPreview}</p>
+                ) : null}
+                {post.notes ? <p className="mt-1 line-clamp-2 leading-6 text-slate-500">{post.notes}</p> : null}
+              </td>
+              <td className="px-3 py-3 text-slate-600">{post.format || "Unsorted"}</td>
+              <MetricCell value={post.views} />
+              <MetricCell value={post.reach} />
+              <MetricCell value={post.likes} />
+              <MetricCell value={post.comments} />
+              <MetricCell value={post.shares} />
+              <MetricCell value={post.saves} />
+              <MetricCell value={post.profileVisits} />
+              <MetricCell value={post.followerGain} />
+              <MetricCell value={post.leads} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MetricCell({ value }: { value: number }) {
+  return <td className="px-3 py-3 tabular-nums text-slate-700">{value.toLocaleString()}</td>;
+}
+
+function SectionHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">{eyebrow}</p>
+      <h2 className="text-xl font-semibold tracking-[-0.03em]">{title}</h2>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  name,
+  defaultValue,
+  textarea,
+  type = "text",
+  min,
+  max,
+  step,
+}: {
+  label: string;
+  name: string;
+  defaultValue: string;
+  textarea?: boolean;
+  type?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+}) {
+  return (
+    <label className="grid gap-2 text-sm text-slate-700">
+      <span className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</span>
+      {textarea ? (
+        <textarea
+          name={name}
+          defaultValue={defaultValue}
+          rows={4}
+          className="border border-black/10 bg-white/85 px-3 py-2 leading-6 outline-none focus:border-slate-900"
+        />
+      ) : (
+        <input
+          name={name}
+          type={type}
+          defaultValue={defaultValue}
+          min={min}
+          max={max}
+          step={step}
+          inputMode={type === "number" ? "numeric" : undefined}
+          className="border border-black/10 bg-white/85 px-3 py-2 outline-none focus:border-slate-900"
+        />
+      )}
+    </label>
+  );
+}
+
+function SelectField({
+  label,
+  name,
+  defaultValue,
+  options,
+  onChange,
+}: {
+  label: string;
+  name: string;
+  defaultValue: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  onChange?: (value: string) => void;
+}) {
+  return (
+    <label className="grid gap-2 text-sm text-slate-700">
+      <span className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</span>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        onChange={(event) => onChange?.(event.target.value)}
+        className="border border-black/10 bg-white/85 px-3 py-2 outline-none focus:border-slate-900"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function ModelRouteFields({
+  title,
+  providerName,
+  modelName,
+  providerValue,
+  modelValue,
+}: {
+  title: string;
+  providerName: string;
+  modelName: string;
+  providerValue: string;
+  modelValue: string;
+}) {
+  return (
+    <div className="grid gap-3 border border-black/8 bg-white/45 p-3">
+      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{title}</p>
+      <SelectField
+        label="Provider"
+        name={providerName}
+        defaultValue={providerValue}
+        options={[
+          { value: "OLLAMA", label: "Ollama local" },
+          { value: "OPENAI", label: "OpenAI GPT" },
+          { value: "ANTHROPIC", label: "Anthropic Claude" },
+        ]}
+      />
+      <Field label="Model" name={modelName} defaultValue={modelValue} />
+    </div>
+  );
+}
+
+function PacketSection({
+  title,
+  items,
+  inline,
+}: {
+  title: string;
+  items: string[];
+  inline?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{title}</p>
+      <div className={cn("grid gap-2 text-sm text-slate-700", inline && "grid-cols-2")}>
+        {items.map((item, index) => (
+          <p key={`${title}-${index}`} className="border-b border-black/6 pb-2 leading-6">
+            {item}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TextBlock({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{title}</p>
+      <p className="text-sm leading-6 text-slate-700">{body}</p>
+    </div>
+  );
+}
+
+function ActionButton({
+  children,
+  onClick,
+  type = "button",
+  tone = "primary",
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  type?: "button" | "submit";
+  tone?: "primary" | "secondary";
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "inline-flex items-center justify-center gap-2 border px-3 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+        tone === "primary"
+          ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
+          : "border-black/10 bg-white/80 text-slate-900 hover:bg-white",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function labelPlatform(platform: ContentPostDto["platform"]) {
+  return PLATFORM_OPTIONS.find((option) => option.value === platform)?.label ?? platform;
+}
+
+function getPlanningPeriodSummary(profile: ProjectProfileDto) {
+  const startDate = parseProfileDate(profile.monthlyStartDate) ?? new Date();
+  const endDate = parseProfileDate(profile.monthlyEndDate);
+  const count = endDate && endDate >= startDate
+    ? clampUiPostCount(differenceInCalendarDays(endDate, startDate) + 1)
+    : clampUiPostCount(profile.monthlyPostCount);
+  const resolvedEndDate = addDays(startDate, count - 1);
+
+  return {
+    count,
+    label: `${format(startDate, "MMM d, yyyy")} - ${format(resolvedEndDate, "MMM d, yyyy")} (${count} days)`,
+  };
+}
+
+function parseProfileDate(value: string) {
+  if (!value.trim()) {
+    return null;
+  }
+
+  const parsed = parseISO(value);
+  return isValid(parsed) ? parsed : null;
+}
+
+function clampUiPostCount(value: number) {
+  return Math.min(60, Math.max(1, Number.isFinite(value) ? value : 30));
+}
+
+function labelInspirationSource(sourceType: CompetitorPostDto["sourceType"]) {
+  return INSPIRATION_SOURCE_TYPES.find((option) => option.value === sourceType)?.label ?? sourceType;
+}
+
+function labelImageAssetType(type: ImageAssetDto["type"]) {
+  return IMAGE_ASSET_TYPES.find((option) => option.value === type)?.label ?? type;
+}
+
+function getImageTemplate(key: string) {
+  return IMAGE_FORMAT_TEMPLATES.find((template) => template.key === key) ?? IMAGE_FORMAT_TEMPLATES[2];
+}
+
+function isVideoPost(post: ContentPostDto) {
+  const value = post.format.toLowerCase();
+  return value.includes("reel") || value.includes("video") || value.includes("tiktok") || value.includes("short");
+}
+
+function buildProductionImagePrompt(post: ContentPostDto, profile: ProjectProfileDto, imageAssets: ImageAssetDto[]) {
+  const template = getImageTemplate(post.imageFormatKey);
+  const selectedAssets = imageAssets.filter((asset) => post.imageReferenceIds.includes(asset.id));
+  const productReferences = selectedAssets.filter((asset) => asset.type === "PRODUCT" || asset.type === "PRODUCT_ON_BODY");
+  const styleReferences = selectedAssets.filter((asset) => asset.type === "STYLE_REFERENCE" || asset.type === "BACKGROUND");
+  const layoutReferences = selectedAssets.filter((asset) => asset.type === "BANNER_REFERENCE");
+  const otherReferences = selectedAssets.filter((asset) => asset.type === "OTHER");
+  const style = cleanPromptLine(post.imageStyle || template.hint || "premium editorial, warm refined light");
+  const objects = cleanPromptLine(
+    enforceImageObjects(post, post.imageObjects || buildDefaultObjects(post, selectedAssets), selectedAssets),
+  );
+  const impression = cleanPromptLine(post.imageImpression || "tasteful, modern, sensual but not explicit, social-ready, clear first-frame impact");
+  const brandName = trimPromptPunctuation(cleanPromptLine(profile.brandName || "ILARIA"));
+  const audience = trimPromptPunctuation(cleanPromptLine(profile.audience || "women 38-55"));
+  const productReferenceLine = formatReferenceGroup(productReferences);
+  const styleReferenceLine = formatReferenceGroup(styleReferences);
+  const layoutReferenceLine = formatReferenceGroup(layoutReferences);
+  const otherReferenceLine = formatReferenceGroup(otherReferences);
+  const referenceInstruction = buildReferenceInstruction(productReferences, styleReferences, layoutReferences);
+  const doNot = buildImageDoNotLine(post.imageFormatKey);
+  const platformUse = post.platform === "BOTH" ? "Instagram and TikTok" : labelPlatform(post.platform);
+
+  return [
+    "TASK: Generate one finished, social-ready image. Do not create a moodboard, grid, mockup, contact sheet, or multiple alternatives.",
+    `BRAND/AUDIENCE: ${brandName}, ${audience}. Tasteful, confident, premium, for adult women.`,
+    `PLATFORM USE: ${platformUse}.`,
+    "",
+    `FORMAT: ${template.label}`,
+    `RESOLUTION: ${cleanPromptLine(post.imageResolution || template.resolution)}`,
+    `ASPECT/FRAME: ${template.aspect}`,
+    "",
+    `SUBJECT: ${objects}`,
+    `SUBJECT RULE: ${template.subjectRule}`,
+    `CONTENT CONTEXT: Theme is "${trimPromptPunctuation(cleanPromptLine(post.theme))}"; post idea is "${trimPromptPunctuation(cleanPromptLine(post.angle))}".`,
+    "",
+    `MAIN STYLE: ${style}`,
+    `SCENE/BACKGROUND: ${buildSceneLine(post, selectedAssets)}`,
+    `COMPOSITION: ${template.compositionRule}`,
+    `CAMERA/FRAMING: ${template.cameraRule}`,
+    "LIGHTING/COLOR: warm refined light, realistic skin/fabric texture, premium editorial contrast, no harsh filters.",
+    `TYPOGRAPHY AREA: ${template.textRule}`,
+    "",
+    `PRODUCT REFERENCES - copy garment/product truth exactly: ${productReferenceLine}`,
+    `STYLE REFERENCES - use only for mood, color, light, texture: ${styleReferenceLine}`,
+    `LAYOUT REFERENCES - use only for spacing and composition: ${layoutReferenceLine}`,
+    otherReferences.length ? `OTHER REFERENCES - use only if directly relevant: ${otherReferenceLine}` : "",
+    `REFERENCE HANDLING: ${referenceInstruction}`,
+    "",
+    `GENERAL IMPRESSION: ${impression}`,
+    `QUALITY BAR: photorealistic or premium editorial quality, polished enough for immediate social media publishing, clear focal point, believable materials, elegant adult mood.`,
+    `DO NOT: ${doNot}`,
+  ].filter(Boolean).join("\n");
+}
+
+function buildProductionVideoBrief(post: ContentPostDto, profile: ProjectProfileDto, imageAssets: ImageAssetDto[]) {
+  const selectedAssets = imageAssets.filter((asset) => post.imageReferenceIds.includes(asset.id));
+  const productReferences = selectedAssets.filter((asset) => asset.type === "PRODUCT" || asset.type === "PRODUCT_ON_BODY");
+  const styleReferences = selectedAssets.filter((asset) => asset.type === "STYLE_REFERENCE" || asset.type === "BACKGROUND" || asset.type === "BANNER_REFERENCE");
+  const platformUse = post.platform === "BOTH" ? "TikTok and Instagram Reels" : labelPlatform(post.platform);
+  const hooks = post.packet?.hookVariants?.length ? post.packet.hookVariants : [post.angle];
+  const ctas = post.packet?.ctaVariants?.length ? post.packet.ctaVariants : ["Save this before choosing the product.", "Comment with your fit question."];
+  const captions = post.packet?.captionVariants?.length ? post.packet.captionVariants : [];
+  const visualBrief = post.packet?.visualBrief || post.visualConcept;
+
+  return [
+    "TASK: Produce one finished short-form video from this brief. This is a production task for a creator, editor, or video specialist, not an image-generation prompt.",
+    `BRAND/AUDIENCE: ${cleanPromptLine(profile.brandName || "ILARIA")} for ${cleanPromptLine(profile.audience || "adult women 38-55")}. Tasteful, modern, premium, warm, useful.`,
+    `PLATFORM USE: ${platformUse}.`,
+    `FORMAT: ${cleanPromptLine(post.format || "Reel")}.`,
+    "RECOMMENDED LENGTH: 8-18 seconds unless the hook needs a slower demonstration.",
+    "OUTPUT: vertical 9:16 video, social-ready, with clean first frame and room for platform captions.",
+    "",
+    `OBJECTIVE: ${cleanPromptLine(post.packet?.objective || post.goal)}`,
+    `CORE ANGLE: ${cleanPromptLine(post.packet?.coreAngle || post.angle)}`,
+    `TOPIC: ${cleanPromptLine(post.theme)}`,
+    "",
+    "HOOK OPTIONS:",
+    formatBriefList(hooks),
+    "",
+    "VIDEO STRUCTURE:",
+    `1. First 1-2 seconds: open with the strongest hook and a visually specific situation: ${cleanPromptLine(post.angle)}.`,
+    `2. Middle: show the proof or action clearly: ${cleanPromptLine(post.tiktokExecution || visualBrief || "demonstrate the problem, then the product-supported resolution")}.`,
+    `3. Final beat: resolve into a tasteful product/fit/comfort proof and use one CTA: ${cleanPromptLine(ctas[0] || "Save this before choosing the product.")}.`,
+    "",
+    "SHOT LIST / VISUAL DIRECTION:",
+    `- Main scene: ${cleanPromptLine(visualBrief || "premium, warm, adult-life fashion moment with clear product relevance")}.`,
+    `- Product/detail shot: ${productReferences.length ? `use selected product references: ${formatReferenceGroup(productReferences)}` : "include product detail only if it is truthful and available."}`,
+    `- Style reference: ${styleReferences.length ? formatReferenceGroup(styleReferences) : cleanPromptLine(post.imageStyle || "premium editorial, warm refined light")}.`,
+    `- Cover/first frame: ${cleanPromptLine(post.imageObjects || post.visualConcept || post.angle)}. Leave negative space for title text added later.`,
+    "",
+    "EDITING NOTES:",
+    "- Keep pacing clean and readable, not chaotic.",
+    "- Use natural movement: mirror adjustment, hands showing detail, outfit transition, sitting/walking/long-day proof when relevant.",
+    "- Avoid before/after body transformation language. Show same-body, better support/comfort/product logic.",
+    "- Text overlays should be short, high-contrast, and readable on mobile.",
+    "- Do not oversexualize, distort body proportions, or invent product details.",
+    "",
+    "INSTAGRAM VERSION:",
+    cleanPromptLine(post.instagramExecution || "Use polished cover, concise caption, and saveable framing."),
+    "",
+    "TIKTOK VERSION:",
+    cleanPromptLine(post.tiktokExecution || "Use faster hook delivery, more direct demonstration, and natural spoken/text-led pacing."),
+    captions.length ? ["", "CAPTION DIRECTIONS:", formatBriefList(captions)].join("\n") : "",
+    "",
+    "CTA OPTIONS:",
+    formatBriefList(ctas),
+    post.assetLinks ? ["", `PREPARED ASSETS / LINKS: ${cleanPromptLine(post.assetLinks)}`].join("\n") : "",
+  ].filter(Boolean).join("\n");
+}
+
+function formatBriefList(items: string[]) {
+  return items.map((item, index) => `${index + 1}. ${cleanPromptLine(item)}`).join("\n");
+}
+
+function formatReferenceGroup(assets: ImageAssetDto[]) {
+  return assets.length
+    ? assets.map((asset) => `${asset.name}${asset.sourcePath ? ` (${asset.sourcePath})` : ""}${asset.description ? ` - ${asset.description}` : ""}`).join(" | ")
+    : "none selected";
+}
+
+function buildDefaultObjects(post: ContentPostDto, selectedAssets: ImageAssetDto[]) {
+  const selectedProducts = selectedAssets
+    .filter((asset) => asset.type === "PRODUCT" || asset.type === "PRODUCT_ON_BODY")
+    .map((asset) => asset.name);
+
+  if (post.imageFormatKey === "product_on_body") {
+    return `adult woman wearing ${selectedProducts.join(", ") || "the selected product"}, product detail visible, clean negative space`;
+  }
+
+  if (post.imageFormatKey === "product_still") {
+    return `${selectedProducts.join(", ") || "selected product"}, product-only composition, fabric and construction detail, no person unless explicitly requested`;
+  }
+
+  if (post.imageFormatKey === "reels_tiktok_cover") {
+    return `${post.visualConcept || post.angle}, clear first-frame focal point, negative space for cover typography`;
+  }
+
+  return post.visualConcept || post.angle;
+}
+
+function buildSceneLine(post: ContentPostDto, selectedAssets: ImageAssetDto[]) {
+  const backgroundAssets = selectedAssets
+    .filter((asset) => asset.type === "BACKGROUND")
+    .map((asset) => asset.name)
+    .join(", ");
+
+  if (backgroundAssets) {
+    return `use ${backgroundAssets} as background mood only; keep it simple and secondary to the subject`;
+  }
+
+  if (post.imageFormatKey === "product_still") {
+    return "minimal premium studio surface or soft fabric background, clean shadows, no decorative clutter";
+  }
+
+  if (post.imageFormatKey === "offer_banner") {
+    return "clean commercial background with enough open space for offer typography added later";
+  }
+
+  if (post.imageFormatKey === "graphic_collage") {
+    return "editorial paper-and-photo collage environment, restrained layers, premium tactile materials";
+  }
+
+  return "premium indoor editorial setting or clean studio background that supports the subject without stealing attention";
+}
+
+function enforceImageObjects(post: ContentPostDto, value: string, selectedAssets: ImageAssetDto[]) {
+  const normalizedValue = normalizeObjectsForFormat(post.imageFormatKey, value);
+  const selectedProducts = selectedAssets
+    .filter((asset) => asset.type === "PRODUCT" || asset.type === "PRODUCT_ON_BODY")
+    .map((asset) => asset.name)
+    .join(", ");
+
+  if (post.imageFormatKey === "product_on_body") {
+    return `adult woman wearing ${selectedProducts || "the selected product"}, product detail visible, ${normalizedValue}`;
+  }
+
+  if (post.imageFormatKey === "product_still") {
+    return `product-only image, no person unless explicitly requested, ${normalizedValue}`;
+  }
+
+  if (post.imageFormatKey === "reels_tiktok_cover") {
+    return `9:16 Reels/TikTok cover composition, strong first-frame focal point, clean negative space, ${normalizedValue}`;
+  }
+
+  return normalizedValue;
+}
+
+function normalizeObjectsForFormat(formatKey: string, value: string) {
+  let normalized = value.replace(/\s+/g, " ").trim();
+
+  if (formatKey !== "carousel") {
+    normalized = normalized
+      .replace(/\bmagazine carousel:\s*/gi, "")
+      .replace(/\bcarousel cover:\s*/gi, "")
+      .replace(/\bcarousel:\s*/gi, "")
+      .replace(/\bmulti-slide\b/gi, "single-frame")
+      .replace(/\bone rule per slide[.,;]?\s*/gi, "")
+      .replace(/\bper slide\b/gi, "for the single frame")
+      .replace(/\bslides?\b/gi, "frame");
+  }
+
+  if (formatKey === "product_still") {
+    normalized = normalized
+      .replace(/\badult woman wearing\b/gi, "")
+      .replace(/\bperson wearing\b/gi, "")
+      .replace(/\bmodel wearing\b/gi, "")
+      .replace(/\bon body\b/gi, "product detail");
+  }
+
+  return normalized.replace(/\s+,/g, ",").replace(/,\s*,/g, ",").trim();
+}
+
+function buildReferenceInstruction(
+  productReferences: ImageAssetDto[],
+  styleReferences: ImageAssetDto[],
+  layoutReferences: ImageAssetDto[],
+) {
+  const rules = [
+    productReferences.length
+      ? "product references define the real garment/product; preserve color, silhouette, straps, fabric, construction, and logo truth"
+      : "no product reference was selected, so avoid inventing brand-specific garment details",
+    styleReferences.length
+      ? "style references are mood boards only; do not copy people, products, logos, or layouts from them"
+      : "",
+    layoutReferences.length
+      ? "layout references control spacing and hierarchy only; do not copy their text, products, or exact design"
+      : "",
+    "do not average all references into a messy hybrid; choose one main subject and keep every reference in its assigned role",
+  ];
+
+  return rules.filter(Boolean).join("; ");
+}
+
+function buildImageDoNotLine(formatKey: string) {
+  const shared =
+    "change garment shape/color, invent straps/lace/logos, add fake text, render unreadable words, oversexualize, make the model look underage, plastic skin, extra fingers, distorted body, messy background, watermark, logo hallucination";
+
+  if (formatKey === "product_still") {
+    return `${shared}, add a person unless explicitly requested`;
+  }
+
+  if (formatKey === "product_on_body") {
+    return `${shared}, hide the product, crop out key garment details, turn the reference product into a different item`;
+  }
+
+  if (formatKey === "reels_tiktok_cover") {
+    return `${shared}, crop the focal object awkwardly, fill all negative space`;
+  }
+
+  return shared;
+}
+
+function cleanPromptLine(value?: string) {
+  return (value ?? "").replace(/\s+/g, " ").trim() || "not specified";
+}
+
+function trimPromptPunctuation(value: string) {
+  return value.replace(/[.;:,]+$/g, "").trim();
+}
+
+function splitAssetLines(value?: string) {
+  return (value ?? "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function isUrl(value: string) {
+  return /^https?:\/\//i.test(value);
+}

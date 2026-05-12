@@ -1,0 +1,283 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  INSTAGRAM
+  TIKTOK
+  BOTH
+}
+
+enum PostStatus {
+  PLANNED
+  PACKET_READY
+  REVIEWED
+}
+
+enum ManualVerdict {
+  WORKED
+  NEUTRAL
+  MISSED
+}
+
+enum AutoClass {
+  WEAK
+  NORMAL
+  STRONG
+}
+
+enum ImageAssetType {
+  PRODUCT
+  PRODUCT_ON_BODY
+  STYLE_REFERENCE
+  BANNER_REFERENCE
+  BACKGROUND
+  OTHER
+}
+
+model ProjectProfile {
+  id                Int       @id @default(autoincrement())
+  projectId         Int       @unique
+  brandName         String
+  audience          String
+  offers            String
+  goals             String
+  contentPillars    String
+  currentPriorities String
+  tone              String
+  language          String
+  monthlyPostCount  Int       @default(30)
+  monthlyStartDate  String    @default("")
+  monthlyEndDate    String    @default("")
+  monthlyCampaignName String  @default("")
+  monthlyPlatformFocus String @default("BOTH")
+  monthlyProductFocus String  @default("")
+  monthlyOffers     String    @default("")
+  monthlyPriorities String    @default("")
+  monthlyMustInclude String   @default("")
+  monthlyAvoid      String    @default("")
+  logoReferenceUrl  String    @default("")
+  visualFonts       String    @default("")
+  visualColors      String    @default("")
+  productReferenceUrl String  @default("")
+  bannerReferenceUrl  String  @default("")
+  layoutReferenceNotes String @default("")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model AppSettings {
+  id                 Int      @id
+  ollamaModel        String   @default("llama3.1:8b")
+  planTextProvider   String   @default("OLLAMA")
+  planTextModel      String   @default("llama3.1:8b")
+  copyTextProvider   String   @default("OLLAMA")
+  copyTextModel      String   @default("llama3.1:8b")
+  insightsProvider   String   @default("OLLAMA")
+  insightsModel      String   @default("llama3.1:8b")
+  defaultLanguage    String   @default("English")
+  brandVoice         String   @default("Clear, useful, observant, and concise.")
+  imageProvider      String   @default("LOCAL_SD_WEBUI")
+  imageModel         String   @default("segmind/tiny-sd")
+  localImageEndpoint String   @default("http://127.0.0.1:7861/sdapi/v1/img2img")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Project {
+  id              Int                   @id @default(autoincrement())
+  name            String
+  slug            String                @unique
+  description     String                @default("")
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  profile         ProjectProfile?
+  posts           ContentPost[]
+  publishedPosts  PublishedPost[]
+  competitorPosts CompetitorPost[]
+  imageAssets     ImageAsset[]
+  recommendations ThemeRecommendation[]
+}
+
+model ContentPost {
+  id          String          @id @default(cuid())
+  projectId   Int
+  platform    Platform
+  plannedDate DateTime
+  goal        String
+  format      String          @default("Reel")
+  theme       String
+  angle       String
+  visualConcept       String  @default("")
+  tiktokExecution     String  @default("")
+  instagramExecution  String  @default("")
+  assetLinks          String  @default("")
+  imageFormatKey      String  @default("reels_tiktok_cover")
+  imageResolution     String  @default("1080x1920")
+  imageStyle          String  @default("")
+  imageObjects        String  @default("")
+  imageImpression     String  @default("")
+  imageReferenceIds   String  @default("[]")
+  status      PostStatus      @default(PLANNED)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  packet      CampaignPacket?
+  review      ReviewResult?
+  images      GeneratedImage[]
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, plannedDate])
+}
+
+model ImageAsset {
+  id              String         @id @default(cuid())
+  projectId       Int
+  type            ImageAssetType
+  name            String
+  sourcePath      String
+  description     String         @default("")
+  productCategory String         @default("")
+  colors          String         @default("")
+  tags            String         @default("")
+  notes           String         @default("")
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, type])
+  @@index([projectId, isActive])
+}
+
+model CampaignPacket {
+  id                  String      @id @default(cuid())
+  postId              String      @unique
+  objective           String
+  targetPlatform      Platform
+  coreAngle           String
+  hookVariants        String
+  captionVariants     String
+  ctaVariants         String
+  hashtagSet          String
+  visualBrief         String
+  imagePromptVariants String
+  reviewChecklist     String
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  post                ContentPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model GeneratedImage {
+  id        String      @id @default(cuid())
+  postId     String
+  prompt     String
+  imagePath  String
+  variant    Int
+  createdAt  DateTime   @default(now())
+  post       ContentPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, variant])
+}
+
+model ReviewResult {
+  id            String        @id @default(cuid())
+  postId         String        @unique
+  reach          Int
+  views          Int
+  likes          Int
+  leads          Int
+  followerGain   Int
+  manualVerdict  ManualVerdict
+  manualNote     String
+  autoScore      Float
+  autoClass      AutoClass
+  reviewedAt     DateTime     @default(now())
+  post           ContentPost   @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model PublishedPost {
+  id             String   @id @default(cuid())
+  projectId      Int
+  platform       Platform
+  postUrl        String
+  publishedAt    DateTime
+  title          String   @default("")
+  textPreview    String   @default("")
+  imageUrl       String   @default("")
+  format         String   @default("")
+  views          Int      @default(0)
+  reach          Int      @default(0)
+  likes          Int      @default(0)
+  comments       Int      @default(0)
+  shares         Int      @default(0)
+  saves          Int      @default(0)
+  profileVisits  Int      @default(0)
+  followerGain   Int      @default(0)
+  leads          Int      @default(0)
+  notes          String   @default("")
+  capturedAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, capturedAt])
+  @@index([projectId, publishedAt])
+}
+
+model CompetitorPost {
+  id             String   @id @default(cuid())
+  projectId      Int
+  sourceType     String   @default("COMPETITOR")
+  competitorName String
+  platform       Platform
+  postUrl        String
+  publishedAt    DateTime
+  format         String   @default("")
+  theme          String   @default("")
+  hook           String   @default("")
+  visualPattern  String   @default("")
+  offer          String   @default("")
+  cta            String   @default("")
+  views          Int      @default(0)
+  likes          Int      @default(0)
+  comments       Int      @default(0)
+  shares         Int      @default(0)
+  saves          Int      @default(0)
+  notes          String   @default("")
+  isActive       Boolean  @default(true)
+  capturedAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, competitorName])
+  @@index([projectId, publishedAt])
+  @@index([projectId, isActive])
+}
+
+model ThemeRecommendation {
+  id                 String    @id @default(cuid())
+  projectId          Int
+  rank               Int
+  theme              String
+  goal               String
+  platform           Platform
+  reason             String
+  suggestedNextAngle String
+  evidence           String
+  createdAt          DateTime  @default(now())
+  project            Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, rank])
+}
