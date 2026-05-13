@@ -41,11 +41,11 @@ The app now expects a Postgres-compatible database, such as Supabase Postgres.
 Required:
 
 ```env
-DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?pgbouncer=true&connection_limit=1"
 DIRECT_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 ```
 
-Use the Supabase Transaction Pooler URI for `DATABASE_URL`.
+Use the Supabase Transaction Pooler URI for `DATABASE_URL`, with `pgbouncer=true&connection_limit=1`.
 Use the Supabase Direct URI or Session Pooler URI for `DIRECT_URL`; Prisma uses it for schema updates.
 
 Update schema:

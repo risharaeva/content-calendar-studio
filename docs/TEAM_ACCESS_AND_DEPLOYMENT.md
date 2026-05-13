@@ -16,7 +16,7 @@ Recommended stack:
 Set these in Vercel:
 
 ```env
-DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?pgbouncer=true&connection_limit=1"
 DIRECT_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 APP_ACCESS_PASSWORD="choose-a-team-password"
 AUTH_SECRET="long-random-string"
@@ -33,7 +33,7 @@ ANTHROPIC_API_KEY=""
 
 Create a Supabase project and copy the Postgres connection string.
 
-For Vercel/serverless usage, use the Transaction Pooler URI as `DATABASE_URL`.
+For Vercel/serverless usage, use the Transaction Pooler URI as `DATABASE_URL`, with `pgbouncer=true&connection_limit=1`.
 Use the Direct URI or Session Pooler URI as `DIRECT_URL` so Prisma can update the schema. Keep passwords private and do not commit them into GitHub.
 
 After `DATABASE_URL` is available:
