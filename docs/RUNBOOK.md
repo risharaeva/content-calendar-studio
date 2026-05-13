@@ -1,6 +1,22 @@
 # Runbook
 
-## Start The App
+## Mac One-Click Files
+
+For teammates on Mac, use:
+
+```text
+scripts/mac/Install Content Calendar.command
+scripts/mac/Start Content Calendar.command
+scripts/mac/Update Content Calendar.command
+```
+
+`Install` clones or updates the GitHub repository into `~/Documents/content-calendar-studio`, installs packages, prepares `.env`, creates the local database, seeds starter data, starts the app, and opens `http://localhost:3000`.
+
+`Start` runs an already installed app.
+
+`Update` pulls the latest code from GitHub, runs `npm install`, and updates the local database schema.
+
+## Manual Start The App
 
 ```bash
 cd "Content Calendar Helper"

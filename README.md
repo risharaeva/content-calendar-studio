@@ -18,6 +18,37 @@ Requirements:
 - npm
 - Optional: Ollama for local text generation
 
+### Mac One-Click Setup
+
+Download or clone the repository, then double-click:
+
+```text
+scripts/mac/Install Content Calendar.command
+```
+
+The installer will clone/update the project in:
+
+```text
+~/Documents/content-calendar-studio
+```
+
+Then it will install packages, create `.env`, initialize the local database, seed starter data, start the app, and open:
+
+```text
+http://localhost:3000
+```
+
+After installation:
+
+```text
+scripts/mac/Start Content Calendar.command
+scripts/mac/Update Content Calendar.command
+```
+
+Use `Start` to run the app. Use `Update` after new code has been pushed to GitHub.
+
+### Manual Setup
+
 ```bash
 git clone <repo-url>
 cd "Content Calendar Helper"
