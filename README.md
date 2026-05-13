@@ -1,14 +1,16 @@
-# Content Calendar Helper
+# Content Calendar Studio
 
-Local-first content planning and marketing production workspace.
+Content planning and creative production workspace for social media teams.
 
-The first internal use case was a direct-to-consumer apparel brand, but the app is intended to grow into a reusable content calendar and creative planning tool for multiple projects, ecommerce brands, and founder-led content systems.
+The app supports content calendar generation, inspiration capture, post packets, image/video briefs, and performance notes.
 
 ## Current Status
 
-This version is ready for local team development through GitHub. It is not yet a shared hosted workspace: each developer who runs it locally gets their own SQLite database.
+The project is being prepared for shared hosted use:
 
-For shared browser access and shared editing, the next step is moving the database to hosted Postgres and deploying the Next.js app.
+- Code lives in GitHub.
+- Data should live in a shared Supabase/Postgres database.
+- The hosted Vercel app should be protected with `APP_ACCESS_PASSWORD`.
 
 ## Local Setup
 
@@ -16,6 +18,7 @@ Requirements:
 
 - Node.js 20+
 - npm
+- A Supabase/Postgres `DATABASE_URL`
 - Optional: Ollama for local text generation
 
 ### Mac One-Click Setup
@@ -32,11 +35,7 @@ The installer will clone/update the project in:
 ~/Documents/content-calendar-studio
 ```
 
-Then it will install packages, create `.env`, initialize the local database, seed starter data, start the app, and open:
-
-```text
-http://localhost:3000
-```
+If `.env` does not contain a real `DATABASE_URL`, the installer will stop and ask you to paste the shared Supabase/Postgres URL.
 
 After installation:
 
@@ -50,8 +49,8 @@ Use `Start` to run the app. Use `Update` after new code has been pushed to GitHu
 ### Manual Setup
 
 ```bash
-git clone <repo-url>
-cd "Content Calendar Helper"
+git clone https://github.com/risharaeva/content-calendar-studio.git
+cd content-calendar-studio
 cp .env.example .env
 npm install
 npm run db:push
@@ -67,10 +66,17 @@ http://localhost:3000
 
 ## Environment Variables
 
-Local SQLite:
+Shared database:
 
 ```env
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
+```
+
+Hosted password gate:
+
+```env
+APP_ACCESS_PASSWORD="choose-a-team-password"
+AUTH_SECRET="long-random-string"
 ```
 
 Optional cloud providers:
@@ -80,8 +86,6 @@ OPENAI_API_KEY=""
 ANTHROPIC_API_KEY=""
 ```
 
-The local SQLite database is created at `prisma/dev.db` and is intentionally ignored by Git.
-
 ## Scripts
 
 ```bash
@@ -89,8 +93,8 @@ npm run dev              # Start local dev server
 npm run build            # Production build
 npm run lint             # ESLint
 npm run test             # Unit tests
-npm run db:push          # Initialize/update local SQLite schema
-npm run db:seed          # Seed demo data
+npm run db:push          # Push Prisma schema to Postgres
+npm run db:seed          # Seed starter data
 npm run prisma:generate  # Generate Prisma client
 ```
 
@@ -100,9 +104,9 @@ Do commit:
 
 - `src/`
 - `prisma/schema.prisma`
-- `prisma/init-db.ts`
 - `prisma/seed.ts`
 - `docs/`
+- `scripts/`
 - `package.json`
 - `package-lock.json`
 - `.env.example`
@@ -110,7 +114,7 @@ Do commit:
 Do not commit:
 
 - `.env`
-- `prisma/dev.db`
+- local database files
 - `.logs/`
 - `.next/`
 - `node_modules/`

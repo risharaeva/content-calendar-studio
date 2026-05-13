@@ -47,10 +47,24 @@ if [ ! -f ".env" ]; then
   cp .env.example .env
 fi
 
+if grep -q "USER:PASSWORD@HOST" ".env"; then
+  print ""
+  print "The app is installed, but .env still needs a real Supabase/Postgres DATABASE_URL."
+  print "Open this file and paste the shared database URL:"
+  print "$APP_DIR/.env"
+  print ""
+  print "After that, double-click:"
+  print "$APP_DIR/scripts/mac/Start Content Calendar.command"
+  print ""
+  print "Press Enter to close this window."
+  read -r _
+  exit 0
+fi
+
 print_step "Installing packages"
 npm install
 
-print_step "Preparing local database"
+print_step "Preparing database"
 npm run db:push
 
 print_step "Seeding starter data"

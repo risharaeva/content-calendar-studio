@@ -25,9 +25,8 @@ The MVP includes:
 ## Current Technical Stack
 
 - Next.js + TypeScript
-- SQLite local database
+- Postgres database, usually Supabase for shared team use
 - Prisma client for app data access
-- Custom SQLite bootstrap script at `prisma/init-db.ts`
 - Optional Ollama support for local text generation
 - Optional OpenAI text/image support
 - Optional Anthropic text support
@@ -89,4 +88,4 @@ Avoid:
 4. Add suggestions that turn performance notes into next content directions.
 5. Add provider presets for local models and cloud text/image providers.
 6. Add import/export for project briefs and content calendars.
-7. Move from local SQLite to hosted Postgres when shared editing is needed.
+7. Add richer role-based access once more people use the hosted workspace.

@@ -14,7 +14,7 @@ Main areas:
 - `src/lib/image-renderer.ts`: image provider routing
 - `src/lib/scoring.ts`: scoring rules and tests
 - `prisma/schema.prisma`: data model
-- `prisma/init-db.ts`: SQLite bootstrap and incremental column setup
+- `prisma/schema.prisma`: Prisma schema for Postgres/Supabase
 - `prisma/seed.ts`: starter demo data
 
 ## Important Design Choice

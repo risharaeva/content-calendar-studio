@@ -38,7 +38,11 @@ git pull --ff-only
 print_step "Installing package changes"
 npm install
 
-print_step "Updating local database schema"
+if grep -q "USER:PASSWORD@HOST" ".env"; then
+  fail "DATABASE_URL is not configured yet. Open $APP_DIR/.env and paste the shared Supabase/Postgres URL."
+fi
+
+print_step "Updating database schema"
 npm run db:push
 
 print_step "Update complete"
