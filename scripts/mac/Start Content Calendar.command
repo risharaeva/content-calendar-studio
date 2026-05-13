@@ -22,7 +22,7 @@ if [ ! -f ".env" ]; then
   cp .env.example .env
 fi
 
-if grep -q "USER:PASSWORD@HOST" ".env"; then
+if grep -q "DATABASE_URL=\"postgresql://USER:PASSWORD@HOST" ".env"; then
   fail "DATABASE_URL is not configured yet. Open $APP_DIR/.env and paste the shared Supabase/Postgres URL."
 fi
 
@@ -30,6 +30,5 @@ if [ ! -d "node_modules" ]; then
   npm install
 fi
 
-npm run db:push
 open "http://localhost:3000" || true
 npm run dev

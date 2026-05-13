@@ -10,7 +10,7 @@ scripts/mac/Start Content Calendar.command
 scripts/mac/Update Content Calendar.command
 ```
 
-`Install` clones or updates the GitHub repository into `~/Documents/content-calendar-studio`, installs packages, prepares `.env`, and stops if `DATABASE_URL` has not been configured yet.
+`Install` clones or updates the GitHub repository into `~/Documents/content-calendar-studio`, installs packages, prepares `.env`, and stops if the database URLs have not been configured yet.
 
 `Start` runs an already installed app.
 
@@ -42,7 +42,11 @@ Required:
 
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
+DIRECT_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 ```
+
+Use the Supabase Transaction Pooler URI for `DATABASE_URL`.
+Use the Supabase Direct URI or Session Pooler URI for `DIRECT_URL`; Prisma uses it for schema updates.
 
 Update schema:
 

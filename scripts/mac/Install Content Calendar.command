@@ -47,10 +47,10 @@ if [ ! -f ".env" ]; then
   cp .env.example .env
 fi
 
-if grep -q "USER:PASSWORD@HOST" ".env"; then
+if ! grep -q "^DATABASE_URL=" ".env" || ! grep -q "^DIRECT_URL=" ".env" || grep -q "USER:PASSWORD@HOST" ".env"; then
   print ""
-  print "The app is installed, but .env still needs a real Supabase/Postgres DATABASE_URL."
-  print "Open this file and paste the shared database URL:"
+  print "The app is installed, but .env still needs real Supabase/Postgres URLs."
+  print "Open this file and paste DATABASE_URL and DIRECT_URL:"
   print "$APP_DIR/.env"
   print ""
   print "After that, double-click:"

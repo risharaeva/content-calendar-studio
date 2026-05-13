@@ -18,7 +18,7 @@ Requirements:
 
 - Node.js 20+
 - npm
-- A Supabase/Postgres `DATABASE_URL`
+- Supabase/Postgres `DATABASE_URL` and `DIRECT_URL`
 - Optional: Ollama for local text generation
 
 ### Mac One-Click Setup
@@ -35,7 +35,7 @@ The installer will clone/update the project in:
 ~/Documents/content-calendar-studio
 ```
 
-If `.env` does not contain a real `DATABASE_URL`, the installer will stop and ask you to paste the shared Supabase/Postgres URL.
+If `.env` does not contain real Supabase/Postgres URLs, the installer will stop and ask you to paste them.
 
 After installation:
 
@@ -70,7 +70,11 @@ Shared database:
 
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
+DIRECT_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 ```
+
+Use the Supabase Transaction Pooler URI for `DATABASE_URL`.
+Use the Supabase Direct URI or Session Pooler URI for `DIRECT_URL`; Prisma uses it when creating or updating tables.
 
 Hosted password gate:
 

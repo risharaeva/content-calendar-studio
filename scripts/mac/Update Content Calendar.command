@@ -38,8 +38,8 @@ git pull --ff-only
 print_step "Installing package changes"
 npm install
 
-if grep -q "USER:PASSWORD@HOST" ".env"; then
-  fail "DATABASE_URL is not configured yet. Open $APP_DIR/.env and paste the shared Supabase/Postgres URL."
+if ! grep -q "^DATABASE_URL=" ".env" || ! grep -q "^DIRECT_URL=" ".env" || grep -q "USER:PASSWORD@HOST" ".env"; then
+  fail "Database URLs are not configured yet. Open $APP_DIR/.env and paste DATABASE_URL and DIRECT_URL."
 fi
 
 print_step "Updating database schema"
