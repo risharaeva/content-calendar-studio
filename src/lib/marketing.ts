@@ -689,8 +689,7 @@ export async function generateMonthlyPlan(projectId = DEFAULT_PROJECT_ID) {
     competitorPatterns,
     targetPostCount,
   );
-  const startDate = planningPeriod.startDate;
-  const dates = Array.from({ length: targetPostCount }, (_, index) => addDays(startDate, index));
+  const dates = distributePostDates(planningPeriod.startDate, planningPeriod.endDate, targetPostCount);
 
   const existingPosts = await prisma.contentPost.findMany({
     where: {
@@ -701,72 +700,72 @@ export async function generateMonthlyPlan(projectId = DEFAULT_PROJECT_ID) {
     },
   });
 
-  await prisma.$transaction(async (tx) => {
-    const replaceablePosts = existingPosts.filter((post) => !post.review);
-    if (replaceablePosts.length) {
-      await tx.generatedImage.deleteMany({
-        where: {
-          postId: {
-            in: replaceablePosts.map((post) => post.id),
-          },
-        },
-      });
+  const replaceablePostIds = existingPosts.filter((post) => !post.review).map((post) => post.id);
+  const nextPosts = dates.flatMap((date, index) => {
+    const hasReviewedPost = existingPosts.some(
+      (post) =>
+        post.review &&
+        startOfDay(post.plannedDate).getTime() === startOfDay(date).getTime(),
+    );
 
-      await tx.reviewResult.deleteMany({
-        where: {
-          postId: {
-            in: replaceablePosts.map((post) => post.id),
-          },
-        },
-      });
-
-      await tx.campaignPacket.deleteMany({
-        where: {
-          postId: {
-            in: replaceablePosts.map((post) => post.id),
-          },
-        },
-      });
-
-      await tx.contentPost.deleteMany({
-        where: {
-          id: {
-            in: replaceablePosts.map((post) => post.id),
-          },
-        },
-      });
+    if (hasReviewedPost) {
+      return [];
     }
 
-    for (const [index, date] of dates.entries()) {
-      const hasReviewedPost = existingPosts.some(
-        (post) =>
-          post.review &&
-          startOfDay(post.plannedDate).getTime() === startOfDay(date).getTime(),
-      );
+    const item = planItems[index];
 
-      if (hasReviewedPost) {
-        continue;
-      }
-
-      const item = planItems[index];
-
-      await tx.contentPost.create({
-        data: {
-          projectId,
-          plannedDate: date,
-          platform: item.platform,
-          goal: item.goal,
-          format: item.format,
-          theme: item.theme,
-          angle: item.angle,
-          visualConcept: item.visualConcept,
-          tiktokExecution: item.tiktokExecution,
-          instagramExecution: item.instagramExecution,
-          status: PostStatus.PLANNED,
-        },
-      });
-    }
+    return [{
+      projectId,
+      plannedDate: date,
+      platform: item.platform,
+      goal: item.goal,
+      format: item.format,
+      theme: item.theme,
+      angle: item.angle,
+      visualConcept: item.visualConcept,
+      tiktokExecution: item.tiktokExecution,
+      instagramExecution: item.instagramExecution,
+      status: PostStatus.PLANNED,
+    }];
   });
+
+  await prisma.$transaction([
+    prisma.generatedImage.deleteMany({
+      where: {
+        postId: {
+          in: replaceablePostIds,
+        },
+      },
+    }),
+    prisma.reviewResult.deleteMany({
+      where: {
+        postId: {
+          in: replaceablePostIds,
+        },
+      },
+    }),
+    prisma.campaignPacket.deleteMany({
+      where: {
+        postId: {
+          in: replaceablePostIds,
+        },
+      },
+    }),
+    prisma.contentPost.deleteMany({
+      where: {
+        id: {
+          in: replaceablePostIds,
+        },
+      },
+    }),
+    ...(nextPosts.length
+      ? [
+          prisma.contentPost.createMany({
+            data: nextPosts,
+          }),
+        ]
+      : []),
+  ]);
 
   return getDashboardState(projectId);
 }
@@ -1754,15 +1753,43 @@ function clampPostCount(value: number | null | undefined) {
 function resolvePlanningPeriod(profile: Pick<ProjectProfileDto | ProjectProfile, "monthlyPostCount" | "monthlyStartDate" | "monthlyEndDate">) {
   const startDate = parsePlanDate(profile.monthlyStartDate) ?? startOfDay(new Date());
   const endDate = parsePlanDate(profile.monthlyEndDate);
-  const postCount = endDate && endDate >= startDate
-    ? clampPostCount(differenceInCalendarDays(endDate, startDate) + 1)
-    : clampPostCount(profile.monthlyPostCount);
+  const postCount = clampPostCount(profile.monthlyPostCount);
 
   return {
     startDate,
-    endDate: addDays(startDate, postCount - 1),
+    endDate: endDate && endDate >= startDate ? endDate : addDays(startDate, postCount - 1),
     postCount,
   };
+}
+
+export function distributePostDates(startDate: Date, endDate: Date, postCount: number) {
+  const periodDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
+
+  if (postCount <= periodDays) {
+    return Array.from({ length: postCount }, (_, index) => {
+      const offset = Math.floor((index * periodDays) / postCount);
+      return addDays(startDate, Math.min(offset, periodDays - 1));
+    });
+  }
+
+  const dates: Date[] = [];
+  const basePostsPerDay = Math.floor(postCount / periodDays);
+  const extraPosts = postCount % periodDays;
+
+  for (let dayIndex = 0; dayIndex < periodDays; dayIndex += 1) {
+    const date = addDays(startDate, dayIndex);
+
+    for (let slot = 0; slot < basePostsPerDay; slot += 1) {
+      dates.push(date);
+    }
+  }
+
+  for (let extraIndex = 0; extraIndex < extraPosts; extraIndex += 1) {
+    const offset = Math.floor((extraIndex * periodDays) / extraPosts);
+    dates.push(addDays(startDate, Math.min(offset, periodDays - 1)));
+  }
+
+  return dates.toSorted((left, right) => left.getTime() - right.getTime());
 }
 
 function parsePlanDate(value: string | null | undefined) {

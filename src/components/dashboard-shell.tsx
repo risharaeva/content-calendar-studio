@@ -2,7 +2,18 @@
 
 import { useDeferredValue, useRef, useState, useTransition } from "react";
 import { addDays, differenceInCalendarDays, format, isValid, parseISO } from "date-fns";
-import { ArrowUpRight, Copy, ImageIcon } from "lucide-react";
+import {
+  ArrowUpRight,
+  BarChart3,
+  CalendarDays,
+  Copy,
+  ImageIcon,
+  Layers3,
+  Palette,
+  Settings2,
+  Sparkles,
+  Target,
+} from "lucide-react";
 import { AUTO_CLASS_LABELS, PLATFORM_OPTIONS, STATUS_LABELS } from "@/lib/constants";
 import { AppSettingsDto, CompetitorPostDto, ContentPostDto, DashboardState, ImageAssetDto, ProjectDto, ProjectProfileDto, PublishedPostDto } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -110,6 +121,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [productionPrompt, setProductionPrompt] = useState<{ postId: string; text: string; kind: "image" | "video" } | null>(null);
   const [activeTab, setActiveTab] = useState<"inputs" | "calendar" | "analytics">("inputs");
+  const [activeInputTab, setActiveInputTab] = useState<"plan" | "inspiration" | "visual" | "strategy" | "advanced">("plan");
   const [isPending, startTransition] = useTransition();
   const isBusy = isPending || busyAction !== null;
 
@@ -135,6 +147,12 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
     const haystack = `${post.theme} ${post.goal} ${post.format} ${post.angle} ${post.platform}`.toLowerCase();
     return haystack.includes(deferredQuery.toLowerCase());
   });
+  const groupedCalendar = groupPostsByDay(
+    filteredCalendar,
+    planningPeriod.startDate,
+    planningPeriod.endDate,
+    !deferredQuery.trim(),
+  );
 
   async function callJson<T>(url: string, init?: RequestInit) {
     const response = await fetch(url, {
@@ -448,14 +466,19 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(195,222,206,0.32),_transparent_35%),linear-gradient(180deg,_#f7f3ea_0%,_#f3efe6_45%,_#ebe3d5_100%)] text-slate-900">
+    <main className="min-h-screen bg-[#f6f2ea] text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1680px] flex-col px-4 py-4 sm:px-6 lg:px-8">
-        <header className="border border-black/10 bg-[#f9f5ee]/90 p-5 shadow-[0_24px_80px_rgba(46,40,28,0.08)] backdrop-blur">
+        <header className="rounded-[18px] border border-[#ded8cc] bg-[#fffcf7]/95 p-5 shadow-[0_24px_80px_rgba(46,40,28,0.08)] backdrop-blur">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Local marketing operating system</p>
-                <h1 className="text-4xl font-semibold tracking-[-0.04em]">{dashboard.profile.brandName}</h1>
+              <div className="flex items-center gap-3">
+                <div className="grid h-12 w-12 place-items-center rounded-xl bg-[#23211d] text-[#fffcf7]">
+                  <Sparkles size={22} />
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Shared content operating system</p>
+                  <h1 className="text-4xl font-semibold tracking-[-0.04em]">{dashboard.profile.brandName}</h1>
+                </div>
               </div>
               <p className="max-w-3xl text-sm leading-6 text-slate-600">
                 Plan the selected content period, generate post packets, review outcomes, and keep the next content direction grounded in evidence.
@@ -493,10 +516,10 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
           </div>
         </header>
 
-        <nav className="mt-4 grid gap-2 border border-black/10 bg-[#f9f5ee]/75 p-2 sm:grid-cols-3">
-          <TabButton active={activeTab === "inputs"} onClick={() => setActiveTab("inputs")} label="Inputs" />
-          <TabButton active={activeTab === "calendar"} onClick={() => setActiveTab("calendar")} label="Content Calendar" />
-          <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")} label="Analytics" />
+        <nav className="mt-4 grid gap-2 rounded-[16px] border border-[#ded8cc] bg-[#fffcf7]/80 p-2 shadow-[0_14px_40px_rgba(46,40,28,0.06)] sm:grid-cols-3">
+          <TabButton active={activeTab === "inputs"} onClick={() => setActiveTab("inputs")} label="Inputs" icon={<Target size={16} />} />
+          <TabButton active={activeTab === "calendar"} onClick={() => setActiveTab("calendar")} label="Content Calendar" icon={<CalendarDays size={16} />} />
+          <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")} label="Analytics" icon={<BarChart3 size={16} />} />
         </nav>
 
         <div
@@ -508,36 +531,45 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
           )}
         >
           <section className={cn(
-            "flex min-h-[70vh] flex-col gap-4 border border-black/10 bg-[#f9f5ee]/85 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]",
+            "flex min-h-[70vh] flex-col gap-4 rounded-[18px] border border-[#ded8cc] bg-[#fffcf7]/90 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]",
             activeTab !== "inputs" && "hidden",
           )}>
             <SectionHeader eyebrow="Planning inputs" title="Monthly plan setup" />
+            <div className="grid gap-2 rounded-[14px] border border-[#ded8cc] bg-[#f3f0e9] p-2 md:grid-cols-5">
+              <InputSubTabButton active={activeInputTab === "plan"} onClick={() => setActiveInputTab("plan")} icon={<CalendarDays size={15} />} label="Plan setup" />
+              <InputSubTabButton active={activeInputTab === "inspiration"} onClick={() => setActiveInputTab("inspiration")} icon={<Sparkles size={15} />} label="Inspiration" />
+              <InputSubTabButton active={activeInputTab === "visual"} onClick={() => setActiveInputTab("visual")} icon={<Palette size={15} />} label="Visual refs" />
+              <InputSubTabButton active={activeInputTab === "strategy"} onClick={() => setActiveInputTab("strategy")} icon={<Layers3 size={15} />} label="Strategy" />
+              <InputSubTabButton active={activeInputTab === "advanced"} onClick={() => setActiveInputTab("advanced")} icon={<Settings2 size={15} />} label="Advanced" />
+            </div>
             <form
               ref={planningFormRef}
               action={(formData) => startTransition(() => void handleProfileSubmit(formData))}
               className="space-y-3"
             >
-              <div className="grid gap-3 border border-black/8 bg-white/45 p-3 md:grid-cols-[150px_170px_170px_minmax(0,1fr)_180px]">
-                <Field label="Days / posts" name="monthlyPostCount" defaultValue={String(dashboard.profile.monthlyPostCount)} type="number" min={1} max={60} />
-                <Field label="Period start" name="monthlyStartDate" defaultValue={dashboard.profile.monthlyStartDate || format(new Date(), "yyyy-MM-dd")} type="date" />
-                <Field label="Period end" name="monthlyEndDate" defaultValue={dashboard.profile.monthlyEndDate} type="date" />
-                <Field label="Campaign / month name" name="monthlyCampaignName" defaultValue={dashboard.profile.monthlyCampaignName} />
-                <SelectField label="Platform focus" name="monthlyPlatformFocus" defaultValue={dashboard.profile.monthlyPlatformFocus} options={PLATFORM_OPTIONS} />
-              </div>
-              <p className="text-sm leading-6 text-slate-600">
-                Current generation period: {planningPeriod.label}. If Period end is filled, it defines the number of days; otherwise the app uses Period start plus Days / posts.
-              </p>
+              <div className={cn("space-y-3", activeInputTab !== "plan" && "hidden")}>
+                <div className="grid gap-3 rounded-[16px] border border-[#e8d1bf] bg-[#fff5eb] p-3 md:grid-cols-[150px_170px_170px_minmax(0,1fr)_180px]">
+                  <Field label="Total posts" name="monthlyPostCount" defaultValue={String(dashboard.profile.monthlyPostCount)} type="number" min={1} max={60} />
+                  <Field label="Period start" name="monthlyStartDate" defaultValue={dashboard.profile.monthlyStartDate || format(new Date(), "yyyy-MM-dd")} type="date" />
+                  <Field label="Period end" name="monthlyEndDate" defaultValue={dashboard.profile.monthlyEndDate} type="date" />
+                  <Field label="Campaign / month name" name="monthlyCampaignName" defaultValue={dashboard.profile.monthlyCampaignName} />
+                  <SelectField label="Platform focus" name="monthlyPlatformFocus" defaultValue={dashboard.profile.monthlyPlatformFocus} options={PLATFORM_OPTIONS} />
+                </div>
+                <p className="rounded-[12px] border border-[#c8dde4] bg-[#eef6f8] p-3 text-sm leading-6 text-slate-700">
+                  Current generation period: {planningPeriod.label}. Posts are distributed across the full period: fewer posts leave quiet days, more posts create multi-post days.
+                </p>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Main product / product group" name="monthlyProductFocus" defaultValue={dashboard.profile.monthlyProductFocus} textarea />
-                <Field label="Monthly offers" name="monthlyOffers" defaultValue={dashboard.profile.monthlyOffers} textarea />
-                <Field label="Monthly priorities" name="monthlyPriorities" defaultValue={dashboard.profile.monthlyPriorities} textarea />
-                <Field label="Must include this month" name="monthlyMustInclude" defaultValue={dashboard.profile.monthlyMustInclude} textarea />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field label="Main product / product group" name="monthlyProductFocus" defaultValue={dashboard.profile.monthlyProductFocus} textarea />
+                  <Field label="Monthly offers" name="monthlyOffers" defaultValue={dashboard.profile.monthlyOffers} textarea />
+                  <Field label="Monthly priorities" name="monthlyPriorities" defaultValue={dashboard.profile.monthlyPriorities} textarea />
+                  <Field label="Must include this month" name="monthlyMustInclude" defaultValue={dashboard.profile.monthlyMustInclude} textarea />
+                </div>
+                <Field label="Avoid this month" name="monthlyAvoid" defaultValue={dashboard.profile.monthlyAvoid} textarea />
               </div>
-              <Field label="Avoid this month" name="monthlyAvoid" defaultValue={dashboard.profile.monthlyAvoid} textarea />
 
-              <details className="border border-black/8 bg-white/35 p-3">
-                <summary className="cursor-pointer text-sm font-medium tracking-[-0.02em] text-slate-800">Strategy context used by the generator</summary>
+              <div className={cn("rounded-[16px] border border-[#cfdcc6] bg-[#f1f6ee] p-3", activeInputTab !== "strategy" && "hidden")}>
+                <SectionHeader eyebrow="Generator context" title="Brand strategy" />
                 <div className="mt-4 grid gap-3">
                   <Field label="Brand name" name="brandName" defaultValue={dashboard.profile.brandName} />
                   <Field label="Audience" name="audience" defaultValue={dashboard.profile.audience} textarea />
@@ -548,9 +580,9 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                   <Field label="Tone" name="tone" defaultValue={dashboard.profile.tone} textarea />
                   <Field label="Language" name="language" defaultValue={dashboard.profile.language} />
                 </div>
-              </details>
+              </div>
 
-              <div className="border-t border-black/8 pt-4">
+              <div className={cn("rounded-[16px] border border-[#c8dde4] bg-[#eef6f8] p-3", activeInputTab !== "visual" && "hidden")}>
                 <SectionHeader eyebrow="Brand assets" title="Visual identity" />
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <Field label="Logo link or local path" name="logoReferenceUrl" defaultValue={dashboard.profile.logoReferenceUrl} />
@@ -561,12 +593,14 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                   <Field label="Visual style notes" name="layoutReferenceNotes" defaultValue={dashboard.profile.layoutReferenceNotes} textarea />
                 </div>
               </div>
-              <ActionButton type="submit" disabled={isBusy}>
-                Save planning inputs
-              </ActionButton>
+              <div className={cn((activeInputTab === "inspiration" || activeInputTab === "advanced") && "hidden")}>
+                <ActionButton type="submit" disabled={isBusy}>
+                  Save planning inputs
+                </ActionButton>
+              </div>
             </form>
 
-            <div className="border-t border-black/8 pt-4">
+            <div className={cn("rounded-[16px] border border-[#e8d1bf] bg-[#fff5eb] p-4", activeInputTab !== "inspiration" && "hidden")}>
               <SectionHeader eyebrow="Inspiration inbox" title="Posts and ideas to repeat" />
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 Add competitor, Pinterest, Instagram, TikTok, or internal ideas here. The planner will score and reuse the best mechanics first, then fill the rest with ILARIA-original funnel and pillar ideas.
@@ -609,14 +643,14 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
               <CompetitorPostTable posts={dashboard.competitorPosts} />
             </div>
 
-            <details className="border-t border-black/8 pt-4">
-              <summary className="cursor-pointer text-sm font-medium uppercase tracking-[0.18em] text-slate-500">Optional visual reference catalog</summary>
+            <div className={cn("rounded-[16px] border border-[#c8dde4] bg-[#eef6f8] p-4", activeInputTab !== "visual" && "hidden")}>
+              <SectionHeader eyebrow="Reference catalog" title="Visual references" />
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 Use this only when you have concrete product photos, product-on-body examples, banner layouts, or social reference links that should be selectable inside image briefs.
               </p>
               <form
                 action={(formData) => startTransition(() => void handleImageAssetSubmit(formData))}
-                className="mt-4 grid gap-3 border border-black/8 bg-white/45 p-3"
+                className="mt-4 grid gap-3 rounded-[14px] border border-[#c8dde4] bg-white/60 p-3"
               >
                 <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)]">
                   <SelectField label="Type" name="type" defaultValue="STYLE_REFERENCE" options={IMAGE_ASSET_TYPES} />
@@ -650,17 +684,17 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                     />
                   ))
                 ) : (
-                  <p className="border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+                  <p className="rounded-[14px] border border-dashed border-black/12 bg-white/55 p-4 text-sm text-slate-600">
                     Add product photos, product-on-body references, banner layouts, or style references as URLs or local paths.
                   </p>
                 )}
               </div>
-            </details>
+            </div>
 
-            <details className="border-t border-black/8 pt-4">
-              <summary className="cursor-pointer text-sm font-medium uppercase tracking-[0.18em] text-slate-500">Advanced / developer settings</summary>
+            <div className={cn("rounded-[16px] border border-[#ded8cc] bg-[#f3f0e9] p-4", activeInputTab !== "advanced" && "hidden")}>
+              <SectionHeader eyebrow="Advanced" title="Developer settings" />
               <div className="mt-4 grid gap-4">
-                <div className="grid gap-3 border border-black/8 bg-white/45 p-3 md:grid-cols-[280px_minmax(0,1fr)]">
+                <div className="grid gap-3 rounded-[14px] border border-black/8 bg-white/55 p-3 md:grid-cols-[280px_minmax(0,1fr)]">
                   <SelectField
                     key={dashboard.activeProject.id}
                     label="Project"
@@ -677,7 +711,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                   ) : null}
                 </div>
 
-                <div className="border border-black/8 bg-white/45 p-3">
+                <div className="rounded-[14px] border border-black/8 bg-white/55 p-3">
                   <SectionHeader eyebrow="Projects" title="Create workspace" />
                   <form
                     action={(formData) => startTransition(() => void handleProjectCreate(formData))}
@@ -691,7 +725,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                   </form>
                 </div>
 
-                <div className="border border-black/8 bg-white/45 p-3">
+                <div className="rounded-[14px] border border-black/8 bg-white/55 p-3">
                   <SectionHeader eyebrow="Runtime" title="Local settings" />
                   <form
                     action={(formData) => startTransition(() => void handleSettingsSubmit(formData))}
@@ -732,7 +766,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                     />
                     <Field label="Image model" name="imageModel" defaultValue={dashboard.settings.imageModel} />
                     <Field label="Local image endpoint" name="localImageEndpoint" defaultValue={dashboard.settings.localImageEndpoint} />
-                    <div className="rounded-sm border border-black/8 bg-white/55 p-3 text-xs leading-5 text-slate-600">
+                    <div className="rounded-[12px] border border-black/8 bg-white/70 p-3 text-xs leading-5 text-slate-600">
                       Local rendering is treated as a draft preview unless it points to a production ComfyUI, FLUX, or SDXL workflow. Use the production prompt for final social-ready images.
                     </div>
                     <ActionButton type="submit" tone="secondary" disabled={isBusy}>
@@ -741,60 +775,84 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                   </form>
                 </div>
               </div>
-            </details>
+            </div>
           </section>
 
           <section className={cn(
-            "flex min-h-[70vh] flex-col border border-black/10 bg-[#fcfaf5]/88 shadow-[0_18px_60px_rgba(46,40,28,0.06)] xl:max-h-[calc(100vh-13rem)]",
+            "flex min-h-[70vh] flex-col rounded-[18px] border border-[#ded8cc] bg-[#fffcf7]/90 shadow-[0_18px_60px_rgba(46,40,28,0.06)] xl:max-h-[calc(100vh-13rem)]",
             activeTab !== "calendar" && "hidden",
           )}>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/8 px-4 py-4">
               <div>
-                <SectionHeader eyebrow="Calendar" title={`${planningPeriod.count}-day content view`} />
+                <SectionHeader eyebrow="Calendar" title={`${planningPeriod.postCount}-post content view`} />
+                <p className="mt-1 text-sm text-slate-600">{planningPeriod.label}</p>
               </div>
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 aria-label="Filter content calendar"
-                className="w-full max-w-xs border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-slate-900"
+                className="w-full max-w-xs rounded-[10px] border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-slate-900"
                 placeholder="Filter by theme, goal, or angle"
               />
             </div>
-            <div className="flex-1 overflow-auto px-2 py-2 [content-visibility:auto]">
-              {filteredCalendar.length ? (
-                filteredCalendar.map((post) => (
-                  <button
-                    key={post.id}
-                    type="button"
-                    onClick={() => setSelectedPostId(post.id)}
-                    className={cn(
-                      "grid w-full grid-cols-[92px_minmax(0,1fr)_84px] gap-3 border-b border-black/6 px-3 py-3 text-left transition-colors hover:bg-black/[0.03]",
-                      selectedPost?.id === post.id && "bg-[#e9eadf]",
-                    )}
-                  >
-                    <div className="text-xs uppercase tracking-[0.16em] text-slate-500">
-                      <p>{format(new Date(post.plannedDate), "MMM d")}</p>
-                      <p className="mt-1">{labelPlatform(post.platform)}</p>
+            <div className="flex-1 overflow-auto px-3 py-3 [content-visibility:auto]">
+              {groupedCalendar.length ? (
+                groupedCalendar.map((group) => (
+                  <div key={group.key} className="mb-3 rounded-[16px] border border-black/8 bg-[#f8f5ef] p-2">
+                    <div className="flex items-center justify-between gap-3 px-2 py-2">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{format(group.date, "EEE")}</p>
+                        <p className="text-lg font-semibold tracking-[-0.03em]">{format(group.date, "MMM d")}</p>
+                      </div>
+                      <span className={cn(
+                        "rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em]",
+                        group.posts.length > 1
+                          ? "bg-[#87936d] text-white"
+                          : group.posts.length === 1
+                            ? "bg-[#fff0e8] text-slate-800"
+                            : "bg-[#e7e1d7] text-slate-600",
+                      )}>
+                        {group.posts.length === 0 ? "quiet day" : `${group.posts.length} ${group.posts.length === 1 ? "post" : "posts"}`}
+                      </span>
                     </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-medium tracking-[-0.02em]">{post.theme}</p>
-                      <p className="truncate text-sm text-slate-600">{post.format} · {post.goal}</p>
-                      <p className="mt-1 line-clamp-2 text-sm text-slate-500">{post.angle}</p>
+                    <div className="grid gap-2">
+                      {group.posts.length ? group.posts.map((post, index) => (
+                        <button
+                          key={post.id}
+                          type="button"
+                          onClick={() => setSelectedPostId(post.id)}
+                          className={cn(
+                            "grid w-full grid-cols-[8px_minmax(0,1fr)_84px] gap-3 rounded-[12px] border border-black/6 bg-white/70 px-3 py-3 text-left transition-colors hover:bg-white",
+                            selectedPost?.id === post.id && "border-[#ff4c16]/45 bg-[#fff5eb]",
+                          )}
+                        >
+                          <span className={cn("h-full min-h-14 rounded-full", postAccentClass(post, index))} />
+                          <div className="min-w-0">
+                            <p className="truncate text-base font-medium tracking-[-0.02em]">{post.theme}</p>
+                            <p className="truncate text-sm text-slate-600">{post.format} · {post.goal}</p>
+                            <p className="mt-1 line-clamp-2 text-sm text-slate-500">{labelPlatform(post.platform)} · {post.angle}</p>
+                          </div>
+                          <div className="text-right text-xs uppercase tracking-[0.16em] text-slate-500">
+                            <p>{STATUS_LABELS[post.status]}</p>
+                            {post.review ? <p className="mt-1">{AUTO_CLASS_LABELS[post.review.autoClass]}</p> : null}
+                          </div>
+                        </button>
+                      )) : (
+                        <div className="rounded-[12px] border border-dashed border-black/10 bg-white/45 px-3 py-4 text-sm text-slate-500">
+                          No content scheduled for this date.
+                        </div>
+                      )}
                     </div>
-                    <div className="text-right text-xs uppercase tracking-[0.16em] text-slate-500">
-                      <p>{STATUS_LABELS[post.status]}</p>
-                      {post.review ? <p className="mt-1">{AUTO_CLASS_LABELS[post.review.autoClass]}</p> : null}
-                    </div>
-                  </button>
+                  </div>
                 ))
               ) : (
-                <div className="p-6 text-sm text-slate-600">No posts match this filter yet.</div>
+                <div className="rounded-[16px] border border-dashed border-black/12 bg-white/45 p-6 text-sm text-slate-600">No posts match this filter yet.</div>
               )}
             </div>
           </section>
 
           <section className={cn(
-            "flex min-h-[70vh] flex-col gap-4 overflow-auto border border-black/10 bg-[#f7f4ed]/88 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)] xl:max-h-[calc(100vh-13rem)]",
+            "flex min-h-[70vh] flex-col gap-4 overflow-auto rounded-[18px] border border-[#ded8cc] bg-[#fffcf7]/88 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)] xl:max-h-[calc(100vh-13rem)]",
             activeTab !== "calendar" && "hidden",
           )}>
             <SectionHeader eyebrow="Workspace" title={selectedPost ? selectedPost.theme : "Select a post"} />
@@ -845,7 +903,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                                 resolutionInput.value = template.resolution;
                               }
                             }}
-                            className="border border-black/10 bg-white/85 px-3 py-2 outline-none focus:border-slate-900"
+                            className="rounded-[10px] border border-black/10 bg-white/85 px-3 py-2 outline-none focus:border-slate-900"
                           >
                             {IMAGE_FORMAT_TEMPLATES.map((template) => (
                               <option key={template.key} value={template.key}>
@@ -969,7 +1027,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
 
         {activeTab === "analytics" ? (
           <section className="mt-4 grid gap-4">
-            <div className="border border-black/10 bg-[#f9f5ee]/88 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]">
+            <div className="rounded-[18px] border border-[#ded8cc] bg-[#fff5eb]/88 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]">
               <SectionHeader eyebrow="Published posts" title="Add performance snapshot" />
               <form
                 action={(formData) => startTransition(() => void handlePublishedPostSubmit(formData))}
@@ -1017,7 +1075,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
               </form>
             </div>
 
-            <div className="border border-black/10 bg-[#fcfaf5]/88 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]">
+            <div className="rounded-[18px] border border-[#ded8cc] bg-[#fffcf7]/88 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <SectionHeader eyebrow="Performance history" title="All published post snapshots" />
                 <span className="text-xs uppercase tracking-[0.18em] text-slate-500">{publishedPosts.length} rows</span>
@@ -1025,7 +1083,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
               <PublishedPostHistoryTable posts={publishedPosts} />
             </div>
 
-            <div className="border border-black/10 bg-[#f9f5ee]/88 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]">
+            <div className="rounded-[18px] border border-[#cfdcc6] bg-[#f1f6ee]/88 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <SectionHeader eyebrow="Recommendations" title="What to make next" />
                 <ActionButton disabled={isBusy} tone="secondary" onClick={() => runDashboardAction(projectUrl("/api/insights/recompute"), "Insights recomputed.", "Recomputing recommendations...")}>
@@ -1053,7 +1111,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
           </section>
         ) : null}
 
-        <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 border border-black/10 bg-[#f9f5ee]/85 px-4 py-3 text-sm text-slate-600">
+        <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#ded8cc] bg-[#fffcf7]/85 px-4 py-3 text-sm text-slate-600">
           <p>{flash ?? "Ready."}</p>
           <p className={cn(error ? "text-red-600" : "text-slate-500")}>{error ?? "Local data stays on this workstation."}</p>
         </footer>
@@ -1064,10 +1122,12 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
 
 function TabButton({
   active,
+  icon,
   label,
   onClick,
 }: {
   active: boolean;
+  icon: React.ReactNode;
   label: string;
   onClick: () => void;
 }) {
@@ -1076,12 +1136,41 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "border px-4 py-3 text-sm font-medium transition-colors",
+        "inline-flex items-center justify-center gap-2 rounded-[12px] border px-4 py-3 text-sm font-medium transition-colors",
         active
           ? "border-slate-900 bg-slate-900 text-white"
-          : "border-black/8 bg-white/60 text-slate-700 hover:bg-white",
+          : "border-black/8 bg-[#f3f0e9] text-slate-700 hover:bg-white",
       )}
     >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function InputSubTabButton({
+  active,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center justify-center gap-2 rounded-[10px] border px-3 py-2 text-sm font-semibold transition-colors",
+        active
+          ? "border-slate-900 bg-slate-900 text-white"
+          : "border-transparent bg-white/55 text-slate-700 hover:bg-white",
+      )}
+    >
+      {icon}
       {label}
     </button>
   );
@@ -1464,7 +1553,7 @@ function Field({
           name={name}
           defaultValue={defaultValue}
           rows={4}
-          className="border border-black/10 bg-white/85 px-3 py-2 leading-6 outline-none focus:border-slate-900"
+          className="rounded-[10px] border border-black/10 bg-white/85 px-3 py-2 leading-6 outline-none focus:border-slate-900"
         />
       ) : (
         <input
@@ -1475,7 +1564,7 @@ function Field({
           max={max}
           step={step}
           inputMode={type === "number" ? "numeric" : undefined}
-          className="border border-black/10 bg-white/85 px-3 py-2 outline-none focus:border-slate-900"
+          className="rounded-[10px] border border-black/10 bg-white/85 px-3 py-2 outline-none focus:border-slate-900"
         />
       )}
     </label>
@@ -1502,7 +1591,7 @@ function SelectField({
         name={name}
         defaultValue={defaultValue}
         onChange={(event) => onChange?.(event.target.value)}
-        className="border border-black/10 bg-white/85 px-3 py-2 outline-none focus:border-slate-900"
+        className="rounded-[10px] border border-black/10 bg-white/85 px-3 py-2 outline-none focus:border-slate-900"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -1528,7 +1617,7 @@ function ModelRouteFields({
   modelValue: string;
 }) {
   return (
-    <div className="grid gap-3 border border-black/8 bg-white/45 p-3">
+    <div className="grid gap-3 rounded-[14px] border border-black/8 bg-white/55 p-3">
       <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{title}</p>
       <SelectField
         label="Provider"
@@ -1596,10 +1685,10 @@ function ActionButton({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "inline-flex items-center justify-center gap-2 border px-3 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex items-center justify-center gap-2 rounded-[10px] border px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60",
         tone === "primary"
           ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
-          : "border-black/10 bg-white/80 text-slate-900 hover:bg-white",
+          : "border-[#d7c9b8] bg-[#fff7ee] text-slate-900 hover:bg-white",
       )}
     >
       {children}
@@ -1614,15 +1703,53 @@ function labelPlatform(platform: ContentPostDto["platform"]) {
 function getPlanningPeriodSummary(profile: ProjectProfileDto) {
   const startDate = parseProfileDate(profile.monthlyStartDate) ?? new Date();
   const endDate = parseProfileDate(profile.monthlyEndDate);
-  const count = endDate && endDate >= startDate
-    ? clampUiPostCount(differenceInCalendarDays(endDate, startDate) + 1)
-    : clampUiPostCount(profile.monthlyPostCount);
-  const resolvedEndDate = addDays(startDate, count - 1);
+  const postCount = clampUiPostCount(profile.monthlyPostCount);
+  const resolvedEndDate = endDate && endDate >= startDate ? endDate : addDays(startDate, postCount - 1);
+  const periodDays = Math.max(1, differenceInCalendarDays(resolvedEndDate, startDate) + 1);
 
   return {
-    count,
-    label: `${format(startDate, "MMM d, yyyy")} - ${format(resolvedEndDate, "MMM d, yyyy")} (${count} days)`,
+    startDate,
+    endDate: resolvedEndDate,
+    postCount,
+    periodDays,
+    label: `${format(startDate, "MMM d, yyyy")} - ${format(resolvedEndDate, "MMM d, yyyy")} · ${postCount} posts across ${periodDays} days`,
   };
+}
+
+function groupPostsByDay(posts: ContentPostDto[], startDate: Date, endDate: Date, includeQuietDays: boolean) {
+  const groups = new Map<string, { key: string; date: Date; posts: ContentPostDto[] }>();
+
+  if (includeQuietDays) {
+    const periodDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
+
+    for (let dayIndex = 0; dayIndex < periodDays; dayIndex += 1) {
+      const date = addDays(startDate, dayIndex);
+      const key = format(date, "yyyy-MM-dd");
+      groups.set(key, { key, date, posts: [] });
+    }
+  }
+
+  for (const post of posts) {
+    const date = new Date(post.plannedDate);
+    const key = format(date, "yyyy-MM-dd");
+    const group = groups.get(key) ?? { key, date, posts: [] };
+    group.posts.push(post);
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values()).sort((left, right) => left.date.getTime() - right.date.getTime());
+}
+
+function postAccentClass(post: ContentPostDto, index: number) {
+  if (post.status === "REVIEWED") {
+    return "bg-[#87936d]";
+  }
+
+  if (post.packet) {
+    return "bg-[#416d84]";
+  }
+
+  return index % 2 === 0 ? "bg-[#ff4c16]" : "bg-[#d9a441]";
 }
 
 function parseProfileDate(value: string) {

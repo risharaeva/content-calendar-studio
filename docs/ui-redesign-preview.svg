@@ -1,0 +1,226 @@
+<svg width="1440" height="980" viewBox="0 0 1440 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#1D1B18" flood-opacity="0.10"/>
+    </filter>
+    <linearGradient id="headerBand" x1="0" y1="0" x2="1440" y2="120">
+      <stop stop-color="#FFF7EE"/>
+      <stop offset="0.48" stop-color="#F8FAF6"/>
+      <stop offset="1" stop-color="#EEF4F7"/>
+    </linearGradient>
+    <style>
+      .bg { fill: #F6F2EA; }
+      .panel { fill: #FFFCF7; stroke: #DED8CC; stroke-width: 1; }
+      .panel-tint { fill: #FDF4EB; stroke: #E4D4C5; stroke-width: 1; }
+      .panel-blue { fill: #EFF6F7; stroke: #CADFE5; stroke-width: 1; }
+      .panel-green { fill: #F1F5EC; stroke: #D2DCC4; stroke-width: 1; }
+      .ink { fill: #23211D; font-family: Inter, Arial, sans-serif; }
+      .muted { fill: #6F6A61; font-family: Inter, Arial, sans-serif; }
+      .tiny { font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; }
+      .label { font-size: 13px; letter-spacing: .7px; text-transform: uppercase; }
+      .body { font-size: 15px; }
+      .h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+      .h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.2px; }
+      .h3 { font-size: 15px; font-weight: 700; }
+      .mono { font-family: "IBM Plex Mono", Menlo, monospace; }
+      .btn { fill: #24211D; }
+      .btn2 { fill: #FFF7EE; stroke: #D7C9B8; stroke-width: 1; }
+      .orange { fill: #FF4C16; }
+      .sage { fill: #87936D; }
+      .blue { fill: #416D84; }
+      .line { stroke: #BDB6AA; stroke-width: 1; }
+      .icon { stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="980" class="bg"/>
+  <rect width="1440" height="118" fill="url(#headerBand)"/>
+
+  <!-- top bar -->
+  <g transform="translate(42 26)">
+    <rect width="48" height="48" rx="12" fill="#23211D"/>
+    <path d="M18 32L24 15L31 32H18Z" fill="#FFFCF7"/>
+    <text x="66" y="23" class="ink h2">Content Calendar Studio</text>
+    <text x="66" y="46" class="muted body">ILARIA shared workspace</text>
+  </g>
+  <g transform="translate(1040 30)">
+    <rect width="144" height="40" rx="10" class="btn2"/>
+    <path d="M21 20h16M29 12v16" stroke="#FF4C16" stroke-width="2" stroke-linecap="round"/>
+    <text x="48" y="25" class="ink body" font-weight="700">Create plan</text>
+    <rect x="156" width="168" height="40" rx="10" class="btn"/>
+    <path d="M177 13v14M170 20h14M193 15h18M193 25h26" stroke="#FFFCF7" stroke-width="2" stroke-linecap="round"/>
+    <text x="226" y="25" fill="#FFFCF7" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">Recompute themes</text>
+  </g>
+
+  <!-- tabs -->
+  <g transform="translate(42 132)" filter="url(#softShadow)">
+    <rect width="1356" height="58" rx="14" fill="#FFFCF7" stroke="#DED8CC"/>
+    <rect x="10" y="10" width="220" height="38" rx="10" fill="#23211D"/>
+    <path d="M31 22h14M31 30h14M31 38h9" stroke="#FFFCF7" stroke-width="2" stroke-linecap="round"/>
+    <text x="58" y="34" fill="#FFFCF7" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">Inputs</text>
+    <rect x="240" y="10" width="250" height="38" rx="10" fill="#F3F0E9"/>
+    <path d="M263 23h15M263 31h22M263 39h12" stroke="#416D84" stroke-width="2" stroke-linecap="round"/>
+    <text x="296" y="34" class="ink body" font-weight="700">Content Calendar</text>
+    <rect x="500" y="10" width="210" height="38" rx="10" fill="#F3F0E9"/>
+    <path d="M524 38V24M536 38V18M548 38V28" stroke="#87936D" stroke-width="2" stroke-linecap="round"/>
+    <text x="568" y="34" class="ink body" font-weight="700">Analytics</text>
+    <text x="1132" y="34" class="muted body">Saved in Supabase</text>
+    <circle cx="1294" cy="29" r="8" fill="#38A169"/>
+    <text x="1312" y="34" class="ink body" font-weight="700">Live</text>
+  </g>
+
+  <!-- main grid -->
+  <g transform="translate(42 218)">
+    <!-- left inputs panel -->
+    <rect width="430" height="720" rx="18" class="panel" filter="url(#softShadow)"/>
+    <rect x="0" y="0" width="430" height="76" rx="18" fill="#23211D"/>
+    <path d="M28 26h18M28 38h28M28 50h14" stroke="#FFFCF7" stroke-width="2" stroke-linecap="round"/>
+    <text x="70" y="33" fill="#FFFCF7" font-family="Inter, Arial, sans-serif" font-size="12" letter-spacing="1.2">PLANNING INPUTS</text>
+    <text x="70" y="56" fill="#FFFCF7" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700">Monthly plan setup</text>
+
+    <g transform="translate(22 102)">
+      <text y="0" class="muted label">Period</text>
+      <rect y="14" width="118" height="58" rx="10" class="panel-tint"/>
+      <text x="16" y="38" class="muted tiny">Days</text>
+      <text x="16" y="62" class="ink h2">20</text>
+      <rect x="132" y="14" width="236" height="58" rx="10" class="panel-tint"/>
+      <text x="150" y="38" class="muted tiny">Start</text>
+      <text x="150" y="62" class="ink h2">May 13, 2026</text>
+      <circle cx="386" cy="43" r="19" fill="#FF4C16"/>
+      <path d="M379 43h14M386 36v14" stroke="#FFF7EE" stroke-width="2" stroke-linecap="round"/>
+    </g>
+
+    <g transform="translate(22 208)">
+      <text y="0" class="muted label">This month</text>
+      <rect y="16" width="386" height="86" rx="12" class="panel-green"/>
+      <text x="18" y="44" class="ink h3">Offers</text>
+      <text x="18" y="70" class="muted body">Free shipping, easy exchange, seasonal promo</text>
+      <rect y="116" width="386" height="104" rx="12" class="panel-blue"/>
+      <text x="18" y="144" class="ink h3">Priorities</text>
+      <text x="18" y="170" class="muted body">Comfort proof, fit confidence, TikTok Shop trust</text>
+      <text x="18" y="194" class="muted body">Competitor mechanics + ILARIA original gaps</text>
+    </g>
+
+    <g transform="translate(22 470)">
+      <text y="0" class="muted label">Visual identity</text>
+      <rect y="16" width="386" height="156" rx="12" class="panel"/>
+      <text x="18" y="47" class="ink h3">Typography</text>
+      <rect x="18" y="62" width="84" height="30" rx="8" fill="#F3F0E9"/>
+      <text x="35" y="82" class="ink body">Arimo</text>
+      <rect x="112" y="62" width="112" height="30" rx="8" fill="#F3F0E9"/>
+      <text x="129" y="82" class="ink body">GFS Didot</text>
+      <text x="18" y="122" class="ink h3">Palette</text>
+      <circle cx="32" cy="144" r="14" fill="#FF4C16"/>
+      <circle cx="70" cy="144" r="14" fill="#F3F3F3" stroke="#CFC8BA"/>
+      <circle cx="108" cy="144" r="14" fill="#F9F6F1" stroke="#CFC8BA"/>
+      <circle cx="146" cy="144" r="14" fill="#000000"/>
+    </g>
+
+    <g transform="translate(22 660)">
+      <rect width="386" height="38" rx="10" fill="#23211D"/>
+      <text x="132" y="25" fill="#FFFCF7" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">Save inputs</text>
+    </g>
+
+    <!-- center calendar panel -->
+    <g transform="translate(456 0)">
+      <rect width="498" height="720" rx="18" class="panel" filter="url(#softShadow)"/>
+      <g transform="translate(22 24)">
+        <path d="M0 4h18M0 14h28M0 24h14" stroke="#416D84" stroke-width="2" stroke-linecap="round"/>
+        <text x="46" y="10" class="muted label">Calendar</text>
+        <text x="46" y="34" class="ink h1">20-day content view</text>
+      </g>
+      <rect x="316" y="28" width="154" height="38" rx="10" fill="#F3F0E9" stroke="#DED8CC"/>
+      <path d="M337 45h20M347 35v20" stroke="#416D84" stroke-width="2" stroke-linecap="round"/>
+      <text x="370" y="53" class="muted body">Filter</text>
+
+      <g transform="translate(18 92)">
+        <rect width="462" height="92" rx="14" fill="#FFF7EE" stroke="#F1B096"/>
+        <rect x="0" y="0" width="7" height="92" rx="4" fill="#FF4C16"/>
+        <text x="24" y="32" class="muted tiny">MAY 13 · BOTH</text>
+        <text x="24" y="58" class="ink h2">The bra that still feels good at 5 PM</text>
+        <text x="24" y="79" class="muted body">Reels/TikTok cover · Fit confidence</text>
+        <rect x="356" y="28" width="80" height="28" rx="8" fill="#23211D"/>
+        <text x="374" y="47" fill="#FFFCF7" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">Planned</text>
+      </g>
+
+      <g transform="translate(18 200)">
+        <rect width="462" height="82" rx="14" fill="#F8FAF6" stroke="#D6E1CF"/>
+        <rect x="0" y="0" width="7" height="82" rx="4" fill="#87936D"/>
+        <text x="24" y="30" class="muted tiny">MAY 14 · INSTAGRAM</text>
+        <text x="24" y="55" class="ink h2">Carousel: 3 fit worries after body changes</text>
+        <rect x="356" y="27" width="80" height="28" rx="8" fill="#EEF4E6"/>
+        <text x="374" y="46" class="ink" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">Draft</text>
+      </g>
+
+      <g transform="translate(18 298)">
+        <rect width="462" height="82" rx="14" fill="#F7FBFC" stroke="#CADFE5"/>
+        <rect x="0" y="0" width="7" height="82" rx="4" fill="#416D84"/>
+        <text x="24" y="30" class="muted tiny">MAY 15 · TIKTOK</text>
+        <text x="24" y="55" class="ink h2">Support without squeeze: one myth to break</text>
+        <rect x="356" y="27" width="80" height="28" rx="8" fill="#E6F0F3"/>
+        <text x="372" y="46" class="ink" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">Packet</text>
+      </g>
+
+      <g transform="translate(18 412)">
+        <text class="muted label">Selected post workspace</text>
+        <rect y="20" width="462" height="250" rx="14" class="panel"/>
+        <text x="22" y="56" class="ink h2">Image / video brief</text>
+        <rect x="22" y="78" width="126" height="32" rx="8" fill="#FFF0E8" stroke="#F1B096"/>
+        <text x="39" y="99" class="ink body">9:16 cover</text>
+        <rect x="158" y="78" width="154" height="32" rx="8" fill="#EEF4F7" stroke="#CADFE5"/>
+        <text x="175" y="99" class="ink body">Editorial warm light</text>
+        <text x="22" y="142" class="muted body">Important objects: adult woman wearing selected product, clean negative space, product truth.</text>
+        <rect x="22" y="174" width="200" height="42" rx="10" class="btn2"/>
+        <path d="M43 187h16v16H43zM49 181h16v16" stroke="#FF4C16" stroke-width="2" stroke-linejoin="round"/>
+        <text x="78" y="200" class="ink body" font-weight="700">Copy brief</text>
+      </g>
+    </g>
+
+    <!-- right analytics panel -->
+    <g transform="translate(978 0)">
+      <rect width="378" height="720" rx="18" class="panel" filter="url(#softShadow)"/>
+      <g transform="translate(22 24)">
+        <path d="M0 26V10M13 26V2M26 26V16" stroke="#87936D" stroke-width="2" stroke-linecap="round"/>
+        <text x="48" y="10" class="muted label">Analytics</text>
+        <text x="48" y="34" class="ink h1">Performance history</text>
+      </g>
+
+      <g transform="translate(22 92)">
+        <rect width="334" height="92" rx="14" class="panel-green"/>
+        <text x="18" y="34" class="ink h3">Published post inbox</text>
+        <text x="18" y="60" class="muted body">Link, preview text, platform, metrics</text>
+        <rect x="244" y="27" width="64" height="38" rx="10" fill="#87936D"/>
+        <path d="M270 37v18M261 46h18" stroke="#FFFCF7" stroke-width="2" stroke-linecap="round"/>
+      </g>
+
+      <g transform="translate(22 212)">
+        <text class="muted label">Main metrics</text>
+        <rect y="16" width="154" height="96" rx="14" fill="#FFF7EE" stroke="#E4D4C5"/>
+        <text x="18" y="50" class="muted tiny">Views</text>
+        <text x="18" y="82" class="ink h1">--</text>
+        <rect x="180" y="16" width="154" height="96" rx="14" fill="#EFF6F7" stroke="#CADFE5"/>
+        <text x="198" y="50" class="muted tiny">Saves</text>
+        <text x="198" y="82" class="ink h1">--</text>
+      </g>
+
+      <g transform="translate(22 356)">
+        <text class="muted label">Recommendations</text>
+        <rect y="18" width="334" height="184" rx="14" class="panel"/>
+        <path d="M24 54h286M24 94h286M24 134h286" class="line"/>
+        <circle cx="34" cy="54" r="6" fill="#FF4C16"/>
+        <text x="54" y="59" class="ink body">What formats worked best</text>
+        <circle cx="34" cy="94" r="6" fill="#416D84"/>
+        <text x="54" y="99" class="ink body">More product-on-body or stills?</text>
+        <circle cx="34" cy="134" r="6" fill="#87936D"/>
+        <text x="54" y="139" class="ink body">What to make next</text>
+      </g>
+
+      <g transform="translate(22 596)">
+        <rect width="334" height="74" rx="14" fill="#23211D"/>
+        <text x="22" y="32" fill="#FFFCF7" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">Compute recommendations</text>
+        <text x="22" y="54" fill="#C9C2B7" font-family="Inter, Arial, sans-serif" font-size="13">Runs after analytics history exists</text>
+        <path d="M290 28l14 14-14 14M274 42h28" stroke="#FFFCF7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </g>
+  </g>
+</svg>

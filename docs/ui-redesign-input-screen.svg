@@ -1,0 +1,79 @@
+<svg width="1440" height="980" viewBox="0 0 1440 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#1E1B17" flood-opacity=".10"/></filter>
+    <style>
+      .bg{fill:#F6F2EA}.surface{fill:#FFFCF7;stroke:#DED8CC}.cream{fill:#FFF5EB;stroke:#E8D1BF}.blue{fill:#EEF6F8;stroke:#C8DDE4}.green{fill:#F1F6EE;stroke:#CFDBC6}
+      .ink{fill:#23211D;font-family:Inter,Arial,sans-serif}.muted{fill:#6F6A61;font-family:Inter,Arial,sans-serif}.h1{font:700 30px Inter,Arial}.h2{font:700 19px Inter,Arial}.body{font:15px Inter,Arial}.small{font:12px Inter,Arial;letter-spacing:1.1px}.btn{fill:#23211D}.orange{fill:#FF4C16}
+    </style>
+  </defs>
+  <rect width="1440" height="980" class="bg"/>
+  <g transform="translate(34 24)">
+    <rect width="1372" height="74" rx="18" class="surface" filter="url(#shadow)"/>
+    <rect x="18" y="16" width="42" height="42" rx="12" fill="#23211D"/><path d="M33 50l6-22 8 22H33z" fill="#FFFCF7"/>
+    <text x="76" y="34" class="ink h2">Content Calendar Studio</text><text x="76" y="56" class="muted body">ILARIA workspace · shared database</text>
+    <g transform="translate(510 15)">
+      <rect width="134" height="44" rx="12" fill="#23211D"/><text x="42" y="28" fill="#FFFCF7" font-family="Inter,Arial" font-size="15" font-weight="700">Inputs</text>
+      <rect x="148" width="194" height="44" rx="12" fill="#F3F0E9"/><text x="196" y="28" class="ink body" font-weight="700">Content Calendar</text>
+      <rect x="356" width="142" height="44" rx="12" fill="#F3F0E9"/><text x="399" y="28" class="ink body" font-weight="700">Analytics</text>
+    </g>
+    <rect x="1154" y="17" width="190" height="40" rx="11" fill="#23211D"/><text x="1196" y="42" fill="#FFFCF7" font-family="Inter,Arial" font-size="15" font-weight="700">Create plan</text>
+  </g>
+  <g transform="translate(42 126)">
+    <text class="ink h1" x="0" y="32">Inputs</text><text class="muted body" x="0" y="60">Project context, content volume, inspiration sources, and visual identity.</text>
+    <g transform="translate(0 88)">
+      <rect width="1356" height="56" rx="14" class="surface"/>
+      <rect x="12" y="10" width="210" height="36" rx="10" fill="#23211D"/><text x="48" y="33" fill="#FFFCF7" font-family="Inter,Arial" font-size="14" font-weight="700">Plan setup</text>
+      <rect x="234" y="10" width="230" height="36" rx="10" fill="#FFF0E8"/><text x="278" y="33" class="ink body" font-weight="700">Inspiration inbox</text>
+      <rect x="476" y="10" width="230" height="36" rx="10" fill="#EEF6F8"/><text x="520" y="33" class="ink body" font-weight="700">Visual references</text>
+      <rect x="718" y="10" width="210" height="36" rx="10" fill="#F1F6EE"/><text x="762" y="33" class="ink body" font-weight="700">Brand strategy</text>
+      <text x="1118" y="34" class="muted body">Autosaves before generation</text><circle cx="1294" cy="28" r="8" fill="#38A169"/>
+    </g>
+  </g>
+  <g transform="translate(42 246)">
+    <rect width="632" height="662" rx="18" class="surface" filter="url(#shadow)"/>
+    <g transform="translate(26 28)">
+      <circle cx="18" cy="18" r="18" fill="#FF4C16"/><path d="M12 18h12M18 12v12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <text x="52" y="16" class="muted small">CONTENT VOLUME</text><text x="52" y="42" class="ink h1">Distribution setup</text>
+    </g>
+    <g transform="translate(26 106)">
+      <rect width="172" height="90" rx="14" class="cream"/><text x="18" y="34" class="muted small">START DATE</text><text x="18" y="65" class="ink h2">May 13</text>
+      <rect x="192" width="172" height="90" rx="14" class="cream"/><text x="210" y="34" class="muted small">END DATE</text><text x="210" y="65" class="ink h2">May 31</text>
+      <rect x="384" width="172" height="90" rx="14" class="cream"/><text x="402" y="34" class="muted small">TOTAL POSTS</text><text x="402" y="65" class="ink h2">20</text>
+    </g>
+    <g transform="translate(26 226)">
+      <text class="muted small">DISTRIBUTION MODE</text>
+      <rect y="22" width="580" height="64" rx="14" class="green"/><circle cx="28" cy="54" r="10" fill="#87936D"/><text x="52" y="49" class="ink h2">Auto spread across period</text><text x="52" y="72" class="muted body">20 posts across 19 days means mostly daily, with one skipped day.</text>
+      <rect y="100" width="580" height="64" rx="14" class="surface"/><circle cx="28" cy="132" r="10" fill="#D4CEC3"/><text x="52" y="127" class="ink h2">Weekdays only</text><text x="52" y="150" class="muted body">Avoid weekends or manually block dates.</text>
+      <rect y="178" width="580" height="64" rx="14" class="surface"/><circle cx="28" cy="210" r="10" fill="#D4CEC3"/><text x="52" y="205" class="ink h2">Manual density</text><text x="52" y="228" class="muted body">Set high-volume days, launch days, and quiet days.</text>
+    </g>
+    <g transform="translate(26 506)">
+      <text class="muted small">PLATFORM RULE</text>
+      <rect y="20" width="278" height="64" rx="14" class="blue"/><text x="20" y="52" class="ink h2">Same idea cross-posted</text><text x="20" y="74" class="muted body">TikTok + Instagram together</text>
+      <rect x="302" y="20" width="278" height="64" rx="14" class="surface"/><text x="322" y="52" class="ink h2">Separate platform slots</text><text x="322" y="74" class="muted body">Counts each platform post</text>
+    </g>
+  </g>
+  <g transform="translate(704 246)">
+    <rect width="694" height="662" rx="18" class="surface" filter="url(#shadow)"/>
+    <g transform="translate(26 28)">
+      <circle cx="18" cy="18" r="18" fill="#416D84"/><path d="M9 18h18M18 9v18" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <text x="52" y="16" class="muted small">INPUT SUBTAB</text><text x="52" y="42" class="ink h1">Inspiration + references</text>
+    </g>
+    <g transform="translate(26 104)">
+      <rect width="310" height="232" rx="16" class="cream"/>
+      <text x="20" y="34" class="ink h2">Competitor / inspiration</text><text x="20" y="62" class="muted body">URL, what to repeat, hook logic, CTA, visual system.</text>
+      <rect x="20" y="92" width="270" height="36" rx="10" fill="#FFFCF7" stroke="#E8D1BF"/><text x="36" y="116" class="muted body">Instagram / TikTok / Pinterest URL</text>
+      <rect x="20" y="144" width="270" height="60" rx="10" fill="#FFFCF7" stroke="#E8D1BF"/><text x="36" y="174" class="muted body">Why this is worth adapting...</text>
+      <rect x="342" width="310" height="232" rx="16" class="blue"/>
+      <text x="362" y="34" class="ink h2">Visual reference catalog</text><text x="362" y="62" class="muted body">Only external URLs: Shopify, Drive, Yandex, social posts.</text>
+      <rect x="362" y="92" width="270" height="36" rx="10" fill="#FFFCF7" stroke="#C8DDE4"/><text x="378" y="116" class="muted body">Reference image / folder URL</text>
+      <rect x="362" y="144" width="128" height="36" rx="10" fill="#23211D"/><text x="390" y="168" fill="#fff" font-family="Inter,Arial" font-size="14" font-weight="700">Add asset</text>
+    </g>
+    <g transform="translate(26 370)">
+      <rect width="652" height="206" rx="16" class="green"/>
+      <text x="20" y="36" class="ink h2">Visual identity</text>
+      <rect x="20" y="62" width="188" height="96" rx="14" fill="#FFFCF7" stroke="#CFDBC6"/><text x="38" y="96" class="muted small">FONTS</text><text x="38" y="126" class="ink h2">Arimo · GFS Didot</text>
+      <rect x="232" y="62" width="188" height="96" rx="14" fill="#FFFCF7" stroke="#CFDBC6"/><text x="250" y="96" class="muted small">COLORS</text><circle cx="262" cy="126" r="12" fill="#FF4C16"/><circle cx="296" cy="126" r="12" fill="#F3F3F3" stroke="#ccc"/><circle cx="330" cy="126" r="12" fill="#F9F6F1" stroke="#ccc"/><circle cx="364" cy="126" r="12" fill="#000"/>
+      <rect x="444" y="62" width="188" height="96" rx="14" fill="#FFFCF7" stroke="#CFDBC6"/><text x="462" y="96" class="muted small">LOGO / PRODUCT LINKS</text><text x="462" y="126" class="muted body">External only</text>
+    </g>
+  </g>
+</svg>
