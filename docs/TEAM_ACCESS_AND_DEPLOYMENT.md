@@ -1,5 +1,11 @@
 # Team Access And Deployment
 
+For the detailed repeatable setup guide with troubleshooting notes, see:
+
+```text
+docs/ONLINE_PUBLICATION_RUNBOOK.md
+```
+
 ## Goal
 
 Make Content Calendar Studio available as one shared browser workspace where teammates edit the same data.
