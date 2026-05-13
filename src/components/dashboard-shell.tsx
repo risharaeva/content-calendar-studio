@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useState, useTransition } from "react";
+import { useDeferredValue, useRef, useState, useTransition } from "react";
 import { addDays, differenceInCalendarDays, format, isValid, parseISO } from "date-fns";
 import { ArrowUpRight, Copy, ImageIcon } from "lucide-react";
 import { AUTO_CLASS_LABELS, PLATFORM_OPTIONS, STATUS_LABELS } from "@/lib/constants";
@@ -99,6 +99,7 @@ const INSPIRATION_SOURCE_TYPES = [
 
 export function DashboardShell({ initialState }: DashboardShellProps) {
   const [dashboard, setDashboard] = useState(initialState);
+  const planningFormRef = useRef<HTMLFormElement>(null);
   const [selectedPostId, setSelectedPostId] = useState(
     initialState.todayPriorities[0]?.id ?? initialState.calendar[0]?.id ?? "",
   );
@@ -184,8 +185,8 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
     }
   }
 
-  async function handleProfileSubmit(formData: FormData) {
-    const payload: Omit<ProjectProfileDto, "id" | "projectId"> = {
+  function buildProfilePayload(formData: FormData): Omit<ProjectProfileDto, "id" | "projectId"> {
+    return {
       brandName: String(formData.get("brandName") ?? ""),
       audience: String(formData.get("audience") ?? ""),
       offers: String(formData.get("offers") ?? ""),
@@ -211,12 +212,18 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
       bannerReferenceUrl: String(formData.get("bannerReferenceUrl") ?? ""),
       layoutReferenceNotes: String(formData.get("layoutReferenceNotes") ?? ""),
     };
+  }
 
+  async function savePlanningInputs(formData: FormData) {
+    return callJson<ProjectProfileDto>(projectUrl("/api/profile"), {
+      method: "POST",
+      body: JSON.stringify(buildProfilePayload(formData)),
+    });
+  }
+
+  async function handleProfileSubmit(formData: FormData) {
     try {
-      await callJson<ProjectProfileDto>(projectUrl("/api/profile"), {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      await savePlanningInputs(formData);
       await refreshDashboard("Profile saved.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Profile save failed.");
@@ -267,12 +274,22 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
     }
   }
 
-  async function runDashboardAction(url: string, message: string, workingMessage = "Working...") {
+  async function runDashboardAction(
+    url: string,
+    message: string,
+    workingMessage = "Working...",
+    options: { savePlanningInputsFirst?: boolean } = {},
+  ) {
     setBusyAction(url);
-    setFlash(workingMessage);
+    setFlash(options.savePlanningInputsFirst ? "Saving planning inputs..." : workingMessage);
     setError(null);
 
     try {
+      if (options.savePlanningInputsFirst && planningFormRef.current) {
+        await savePlanningInputs(new FormData(planningFormRef.current));
+        setFlash(workingMessage);
+      }
+
       const next = await callJson<DashboardState>(url, {
         method: "POST",
         body: JSON.stringify({}),
@@ -445,10 +462,31 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <ActionButton disabled={isBusy} onClick={() => runDashboardAction(projectUrl("/api/plan/generate-month"), `${planningPeriod.count}-day plan regenerated.`, `Generating ${planningPeriod.count}-day plan...`)}>
-                {busyAction?.includes("/api/plan/generate-month") ? "Generating..." : `Create ${planningPeriod.count}-day plan`}
+              <ActionButton
+                disabled={isBusy}
+                onClick={() =>
+                  runDashboardAction(
+                    projectUrl("/api/plan/generate-month"),
+                    "Plan regenerated from current inputs.",
+                    "Generating plan from saved inputs...",
+                    { savePlanningInputsFirst: true },
+                  )
+                }
+              >
+                {busyAction?.includes("/api/plan/generate-month") ? "Generating..." : "Create plan"}
               </ActionButton>
-              <ActionButton disabled={isBusy} tone="secondary" onClick={() => runDashboardAction(projectUrl("/api/insights/recompute"), "Insights recomputed.", "Recomputing themes...")}>
+              <ActionButton
+                disabled={isBusy}
+                tone="secondary"
+                onClick={() =>
+                  runDashboardAction(
+                    projectUrl("/api/insights/recompute"),
+                    "Insights recomputed from current inputs.",
+                    "Recomputing themes from saved inputs...",
+                    { savePlanningInputsFirst: true },
+                  )
+                }
+              >
                 {busyAction?.includes("/api/insights/recompute") ? "Recomputing..." : "Recompute themes"}
               </ActionButton>
             </div>
@@ -475,6 +513,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
           )}>
             <SectionHeader eyebrow="Planning inputs" title="Monthly plan setup" />
             <form
+              ref={planningFormRef}
               action={(formData) => startTransition(() => void handleProfileSubmit(formData))}
               className="space-y-3"
             >
