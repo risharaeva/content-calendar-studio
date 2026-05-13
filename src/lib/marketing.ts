@@ -513,70 +513,68 @@ export async function saveSettings(input: Omit<AppSettingsDto, "id" | "hasOpenAi
 export async function getDashboardState(projectId = DEFAULT_PROJECT_ID): Promise<DashboardState> {
   const activeProject = await ensureProjectData(projectId);
 
-  const [projects, profile, settings, posts, imageAssets, publishedPosts, competitorPosts, recommendations] = await Promise.all([
-    prisma.project.findMany({
-      orderBy: {
-        createdAt: "asc",
-      },
-    }),
-    prisma.projectProfile.findUniqueOrThrow({ where: { projectId: activeProject.id } }),
-    prisma.appSettings.findUniqueOrThrow({ where: { id: SETTINGS_ID } }),
-    prisma.contentPost.findMany({
-      where: {
-        projectId: activeProject.id,
-      },
-      include: {
-        packet: true,
-        review: true,
-        images: {
-          orderBy: {
-            variant: "asc",
-          },
+  const projects = await prisma.project.findMany({
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+  const profile = await prisma.projectProfile.findUniqueOrThrow({ where: { projectId: activeProject.id } });
+  const settings = await prisma.appSettings.findUniqueOrThrow({ where: { id: SETTINGS_ID } });
+  const posts = await prisma.contentPost.findMany({
+    where: {
+      projectId: activeProject.id,
+    },
+    include: {
+      packet: true,
+      review: true,
+      images: {
+        orderBy: {
+          variant: "asc",
         },
       },
-      orderBy: {
-        plannedDate: "asc",
+    },
+    orderBy: {
+      plannedDate: "asc",
+    },
+  });
+  const imageAssets = await prisma.imageAsset.findMany({
+    where: {
+      projectId: activeProject.id,
+    },
+    orderBy: [
+      {
+        isActive: "desc",
       },
-    }),
-    prisma.imageAsset.findMany({
-      where: {
-        projectId: activeProject.id,
+      {
+        createdAt: "desc",
       },
-      orderBy: [
-        {
-          isActive: "desc",
-        },
-        {
-          createdAt: "desc",
-        },
-      ],
-    }),
-    prisma.publishedPost.findMany({
-      where: {
-        projectId: activeProject.id,
-      },
-      orderBy: {
-        capturedAt: "desc",
-      },
-    }),
-    prisma.competitorPost.findMany({
-      where: {
-        projectId: activeProject.id,
-      },
-      orderBy: {
-        capturedAt: "desc",
-      },
-    }),
-    prisma.themeRecommendation.findMany({
-      where: {
-        projectId: activeProject.id,
-      },
-      orderBy: {
-        rank: "asc",
-      },
-      take: 3,
-    }),
-  ]);
+    ],
+  });
+  const publishedPosts = await prisma.publishedPost.findMany({
+    where: {
+      projectId: activeProject.id,
+    },
+    orderBy: {
+      capturedAt: "desc",
+    },
+  });
+  const competitorPosts = await prisma.competitorPost.findMany({
+    where: {
+      projectId: activeProject.id,
+    },
+    orderBy: {
+      capturedAt: "desc",
+    },
+  });
+  const recommendations = await prisma.themeRecommendation.findMany({
+    where: {
+      projectId: activeProject.id,
+    },
+    orderBy: {
+      rank: "asc",
+    },
+    take: 3,
+  });
 
   const currentPeriod = resolvePlanningPeriod(profile);
   const calendar = posts

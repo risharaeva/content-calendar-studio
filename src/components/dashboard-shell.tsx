@@ -115,9 +115,13 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
   const selectedPost =
     dashboard.calendar.find((post) => post.id === selectedPostId) ?? dashboard.calendar[0] ?? null;
   const selectedProductionPrompt =
-    productionPrompt?.postId === selectedPost?.id ? productionPrompt.text : null;
+    productionPrompt && selectedPost && productionPrompt.postId === selectedPost.id
+      ? productionPrompt.text
+      : null;
   const selectedProductionBriefKind =
-    productionPrompt?.postId === selectedPost?.id ? productionPrompt.kind : null;
+    productionPrompt && selectedPost && productionPrompt.postId === selectedPost.id
+      ? productionPrompt.kind
+      : null;
   const publishedPosts = dashboard.publishedPosts ?? [];
   const activeImageAssets = (dashboard.imageAssets ?? []).filter((asset) => asset.isActive);
   const planningPeriod = getPlanningPeriodSummary(dashboard.profile);
