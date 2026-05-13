@@ -555,7 +555,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                   <Field label="Campaign / month name" name="monthlyCampaignName" defaultValue={dashboard.profile.monthlyCampaignName} />
                   <SelectField label="Platform focus" name="monthlyPlatformFocus" defaultValue={dashboard.profile.monthlyPlatformFocus} options={PLATFORM_OPTIONS} />
                 </div>
-                <p className="rounded-[12px] border border-[#c8dde4] bg-[#eef6f8] p-3 text-sm leading-6 text-slate-700">
+                <p className="rounded-[12px] border border-[#c8dde4] bg-[#eef6f8] p-3 text-[15px] font-medium leading-6 text-slate-800">
                   Current generation period: {planningPeriod.label}. Posts are distributed across the full period: fewer posts leave quiet days, more posts create multi-post days.
                 </p>
 
@@ -602,7 +602,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
 
             <div className={cn("rounded-[16px] border border-[#e8d1bf] bg-[#fff5eb] p-4", activeInputTab !== "inspiration" && "hidden")}>
               <SectionHeader eyebrow="Inspiration inbox" title="Posts and ideas to repeat" />
-              <p className="mt-2 text-sm leading-6 text-slate-600">
+              <p className="mt-2 text-[15px] font-medium leading-6 text-slate-700">
                 Add competitor, Pinterest, Instagram, TikTok, or internal ideas here. The planner will score and reuse the best mechanics first, then fill the rest with ILARIA-original funnel and pillar ideas.
               </p>
               <form
@@ -645,7 +645,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
 
             <div className={cn("rounded-[16px] border border-[#c8dde4] bg-[#eef6f8] p-4", activeInputTab !== "visual" && "hidden")}>
               <SectionHeader eyebrow="Reference catalog" title="Visual references" />
-              <p className="mt-2 text-sm leading-6 text-slate-600">
+              <p className="mt-2 text-[15px] font-medium leading-6 text-slate-700">
                 Use this only when you have concrete product photos, product-on-body examples, banner layouts, or social reference links that should be selectable inside image briefs.
               </p>
               <form
@@ -684,7 +684,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                     />
                   ))
                 ) : (
-                  <p className="rounded-[14px] border border-dashed border-black/12 bg-white/55 p-4 text-sm text-slate-600">
+                  <p className="rounded-[14px] border border-dashed border-black/12 bg-white/55 p-4 text-[15px] font-medium leading-6 text-slate-700">
                     Add product photos, product-on-body references, banner layouts, or style references as URLs or local paths.
                   </p>
                 )}
@@ -707,7 +707,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                     onChange={(value) => void refreshDashboard(`Switched to ${dashboard.projects.find((project) => String(project.id) === value)?.name ?? "project"}.`, Number(value))}
                   />
                   {dashboard.activeProject.description ? (
-                    <p className="self-end pb-2 text-sm leading-6 text-slate-600">{dashboard.activeProject.description}</p>
+                    <p className="self-end pb-2 text-[15px] font-medium leading-6 text-slate-700">{dashboard.activeProject.description}</p>
                   ) : null}
                 </div>
 
@@ -766,7 +766,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                     />
                     <Field label="Image model" name="imageModel" defaultValue={dashboard.settings.imageModel} />
                     <Field label="Local image endpoint" name="localImageEndpoint" defaultValue={dashboard.settings.localImageEndpoint} />
-                    <div className="rounded-[12px] border border-black/8 bg-white/70 p-3 text-xs leading-5 text-slate-600">
+                    <div className="rounded-[12px] border border-black/8 bg-white/70 p-3 text-sm font-medium leading-6 text-slate-700">
                       Local rendering is treated as a draft preview unless it points to a production ComfyUI, FLUX, or SDXL workflow. Use the production prompt for final social-ready images.
                     </div>
                     <ActionButton type="submit" tone="secondary" disabled={isBusy}>
@@ -785,7 +785,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/8 px-4 py-4">
               <div>
                 <SectionHeader eyebrow="Calendar" title={`${planningPeriod.postCount}-post content view`} />
-                <p className="mt-1 text-sm text-slate-600">{planningPeriod.label}</p>
+                <p className="mt-1 text-[15px] font-medium text-slate-700">{planningPeriod.label}</p>
               </div>
               <input
                 value={query}
@@ -801,7 +801,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                   <div key={group.key} className="mb-3 rounded-[16px] border border-black/8 bg-[#f8f5ef] p-2">
                     <div className="flex items-center justify-between gap-3 px-2 py-2">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{format(group.date, "EEE")}</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">{format(group.date, "EEE")}</p>
                         <p className="text-lg font-semibold tracking-[-0.03em]">{format(group.date, "MMM d")}</p>
                       </div>
                       <span className={cn(
@@ -810,7 +810,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                           ? "bg-[#87936d] text-white"
                           : group.posts.length === 1
                             ? "bg-[#fff0e8] text-slate-800"
-                            : "bg-[#e7e1d7] text-slate-600",
+                            : "bg-[#e7e1d7] text-slate-700",
                       )}>
                         {group.posts.length === 0 ? "quiet day" : `${group.posts.length} ${group.posts.length === 1 ? "post" : "posts"}`}
                       </span>
@@ -828,17 +828,17 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                         >
                           <span className={cn("h-full min-h-14 rounded-full", postAccentClass(post, index))} />
                           <div className="min-w-0">
-                            <p className="truncate text-base font-medium tracking-[-0.02em]">{post.theme}</p>
-                            <p className="truncate text-sm text-slate-600">{post.format} · {post.goal}</p>
-                            <p className="mt-1 line-clamp-2 text-sm text-slate-500">{labelPlatform(post.platform)} · {post.angle}</p>
+                            <p className="truncate text-base font-semibold tracking-[-0.02em] text-slate-950">{post.theme}</p>
+                            <p className="truncate text-sm font-medium text-slate-700">{post.format} · {post.goal}</p>
+                            <p className="mt-1 line-clamp-2 text-[15px] font-medium leading-6 text-slate-700">{labelPlatform(post.platform)} · {post.angle}</p>
                           </div>
-                          <div className="text-right text-xs uppercase tracking-[0.16em] text-slate-500">
+                          <div className="text-right text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
                             <p>{STATUS_LABELS[post.status]}</p>
                             {post.review ? <p className="mt-1">{AUTO_CLASS_LABELS[post.review.autoClass]}</p> : null}
                           </div>
                         </button>
                       )) : (
-                        <div className="rounded-[12px] border border-dashed border-black/10 bg-white/45 px-3 py-4 text-sm text-slate-500">
+                        <div className="rounded-[12px] border border-dashed border-black/10 bg-white/45 px-3 py-4 text-[15px] font-medium leading-6 text-slate-700">
                           No content scheduled for this date.
                         </div>
                       )}
@@ -846,7 +846,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                   </div>
                 ))
               ) : (
-                <div className="rounded-[16px] border border-dashed border-black/12 bg-white/45 p-6 text-sm text-slate-600">No posts match this filter yet.</div>
+                <div className="rounded-[16px] border border-dashed border-black/12 bg-white/45 p-6 text-[15px] font-medium leading-6 text-slate-700">No posts match this filter yet.</div>
               )}
             </div>
           </section>
@@ -862,10 +862,10 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                 <div className="space-y-2 border-b border-black/8 pb-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{labelPlatform(selectedPost.platform)}</p>
-                      <p className="text-lg font-medium tracking-[-0.03em]">{selectedPost.format} · {selectedPost.goal}</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">{labelPlatform(selectedPost.platform)}</p>
+                      <p className="text-lg font-semibold tracking-[-0.03em] text-slate-950">{selectedPost.format} · {selectedPost.goal}</p>
                     </div>
-                    <span className="text-xs uppercase tracking-[0.22em] text-slate-500">
+                    <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
                       {format(new Date(selectedPost.plannedDate), "MMM d")}
                     </span>
                   </div>
@@ -890,8 +890,8 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                         title={isVideoPost(selectedPost) ? "Cover image inputs and visual references" : "External generation brief"}
                       />
                       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
-                        <label className="grid gap-2 text-sm text-slate-700">
-                          <span className="text-xs uppercase tracking-[0.2em] text-slate-500">Template</span>
+                        <label className="grid gap-2 text-sm font-medium text-slate-800">
+                          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Template</span>
                           <select
                             name="imageFormatKey"
                             defaultValue={selectedPost.imageFormatKey || "reels_tiktok_cover"}
@@ -903,7 +903,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                                 resolutionInput.value = template.resolution;
                               }
                             }}
-                            className="rounded-[10px] border border-black/10 bg-white/85 px-3 py-2 outline-none focus:border-slate-900"
+                            className="rounded-[10px] border border-black/10 bg-white/90 px-3 py-2.5 text-[15px] font-medium leading-6 text-slate-950 outline-none focus:border-slate-900 md:text-base"
                           >
                             {IMAGE_FORMAT_TEMPLATES.map((template) => (
                               <option key={template.key} value={template.key}>
@@ -962,7 +962,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                   </div>
                   {selectedProductionPrompt ? (
                     <div className="grid gap-2 border border-black/8 bg-white/55 p-3">
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-slate-500">
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
                         <Copy size={14} />
                         {selectedProductionBriefKind === "video" ? "Video production brief" : "Compact image brief"}
                       </div>
@@ -970,7 +970,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                         readOnly
                         value={selectedProductionPrompt}
                         rows={10}
-                        className="resize-y border border-black/10 bg-white/90 px-3 py-2 font-mono text-xs leading-5 text-slate-700 outline-none"
+                        className="resize-y rounded-[10px] border border-black/10 bg-white/95 px-3 py-2.5 font-mono text-sm font-medium leading-6 text-slate-900 outline-none"
                       />
                     </div>
                   ) : null}
@@ -989,7 +989,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                     <PacketSection title="Review checklist" items={selectedPost.packet.reviewChecklist} />
 
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-slate-500">
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
                         <ImageIcon size={14} />
                         Visual references
                       </div>
@@ -999,13 +999,13 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                             <VisualReferenceCard key={image.id} image={image} theme={selectedPost.theme} />
                           ))
                         ) : (
-                          <p className="text-sm text-slate-600">Visual references will appear here after generating the packet.</p>
+                          <p className="text-[15px] font-medium leading-6 text-slate-700">Visual references will appear here after generating the packet.</p>
                         )}
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-sm border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+                  <div className="rounded-sm border border-dashed border-black/12 bg-white/45 p-4 text-[15px] font-medium leading-6 text-slate-700">
                     Generate a campaign packet to populate copy, prompts, and the review checklist.
                   </div>
                 )}
@@ -1018,7 +1018,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                 </div>
               </>
             ) : (
-              <div className="rounded-sm border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+              <div className="rounded-sm border border-dashed border-black/12 bg-white/45 p-4 text-[15px] font-medium leading-6 text-slate-700">
                 Generate a month of posts and select one to start building assets.
               </div>
             )}
@@ -1068,7 +1068,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                   <ActionButton type="submit" disabled={isBusy}>
                     {isBusy ? "Saving..." : "Add snapshot"}
                   </ActionButton>
-                  <p className="text-sm leading-6 text-slate-600">
+                  <p className="text-[15px] font-medium leading-6 text-slate-700">
                     Add the same post again later to create a new history line. The parser pulls public preview text and image when the platform allows it; metrics stay editable.
                   </p>
                 </div>
@@ -1078,7 +1078,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
             <div className="rounded-[18px] border border-[#ded8cc] bg-[#fffcf7]/88 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <SectionHeader eyebrow="Performance history" title="All published post snapshots" />
-                <span className="text-xs uppercase tracking-[0.18em] text-slate-500">{publishedPosts.length} rows</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">{publishedPosts.length} rows</span>
               </div>
               <PublishedPostHistoryTable posts={publishedPosts} />
             </div>
@@ -1095,16 +1095,16 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                   dashboard.suggestedThemes.map((item) => (
                     <div key={item.id} className="border border-black/8 bg-white/55 p-3">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium tracking-[-0.02em]">{item.theme}</p>
-                        <span className="text-xs uppercase tracking-[0.18em] text-slate-500">{labelPlatform(item.platform)}</span>
+                        <p className="text-[15px] font-semibold tracking-[-0.02em] text-slate-950">{item.theme}</p>
+                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">{labelPlatform(item.platform)}</span>
                       </div>
-                      <p className="mt-1 text-sm text-slate-600">{item.goal}</p>
-                      <p className="mt-3 text-sm leading-6 text-slate-700">{item.reason}</p>
-                      <p className="mt-3 text-sm leading-6 text-slate-500">{item.suggestedNextAngle}</p>
+                      <p className="mt-1 text-sm font-medium text-slate-700">{item.goal}</p>
+                      <p className="mt-3 text-[15px] font-medium leading-6 text-slate-800">{item.reason}</p>
+                      <p className="mt-3 text-[15px] font-medium leading-6 text-slate-700">{item.suggestedNextAngle}</p>
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-slate-600">Add published post snapshots, then recompute recommendations.</p>
+                  <p className="text-[15px] font-medium leading-6 text-slate-700">Add published post snapshots, then recompute recommendations.</p>
                 )}
               </div>
             </div>
@@ -1181,7 +1181,7 @@ function AssetLinks({ value }: { value: string }) {
 
   if (!items.length) {
     return (
-      <div className="rounded-sm border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+      <div className="rounded-sm border border-dashed border-black/12 bg-white/45 p-4 text-[15px] font-medium leading-6 text-slate-700">
         Add generated image URLs, video links, Drive links, or production storage links in the post idea form above.
       </div>
     );
@@ -1196,12 +1196,12 @@ function AssetLinks({ value }: { value: string }) {
             href={item}
             target="_blank"
             rel="noreferrer"
-            className="break-all border border-black/8 bg-white/65 p-3 text-sm leading-6 text-slate-700 hover:bg-white"
+            className="break-all border border-black/8 bg-white/65 p-3 text-[15px] font-medium leading-6 text-slate-800 hover:bg-white"
           >
             {item}
           </a>
         ) : (
-          <p key={`${item}-${index}`} className="border border-black/8 bg-white/65 p-3 text-sm leading-6 text-slate-700">
+          <p key={`${item}-${index}`} className="border border-black/8 bg-white/65 p-3 text-[15px] font-medium leading-6 text-slate-800">
             {item}
           </p>
         )
@@ -1269,16 +1269,16 @@ function VisualReferenceCard({
           />
         ) : (
           <div className="flex h-full flex-col justify-between bg-[#ede7dc] p-4 text-slate-800">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">
               <ArrowUpRight size={14} />
               Social reference
             </div>
-            <p className="text-lg font-medium tracking-[-0.03em]">Open source post for visual direction</p>
-            <p className="break-all text-xs leading-5 text-slate-500">{image.imagePath}</p>
+            <p className="text-lg font-semibold tracking-[-0.03em] text-slate-950">Open source post for visual direction</p>
+            <p className="break-all text-sm font-medium leading-6 text-slate-700">{image.imagePath}</p>
           </div>
         )}
       </div>
-      <figcaption className="space-y-1 text-xs leading-5 text-slate-500">
+      <figcaption className="space-y-1 text-sm font-medium leading-6 text-slate-700">
         <p>{image.prompt}</p>
         <a
           href={image.imagePath}
@@ -1297,7 +1297,7 @@ function VisualReferenceCard({
 function CompetitorPostTable({ posts }: { posts: CompetitorPostDto[] }) {
   if (!posts.length) {
     return (
-      <p className="mt-4 border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+              <p className="mt-4 border border-dashed border-black/12 bg-white/45 p-4 text-[15px] font-medium leading-6 text-slate-700">
         Add competitor, Pinterest, Instagram, TikTok, or internal inspiration links to activate the inspiration-based planning flow.
       </p>
     );
@@ -1321,18 +1321,18 @@ function CompetitorPostTable({ posts }: { posts: CompetitorPostDto[] }) {
         </thead>
         <tbody>
           {posts.slice(0, 12).map((post) => (
-            <tr key={post.id} className="border-b border-black/6 align-top">
-              <td className="px-3 py-3 text-slate-600">{labelInspirationSource(post.sourceType)}</td>
+            <tr key={post.id} className="border-b border-black/6 align-top text-[15px] font-medium text-slate-800">
+              <td className="px-3 py-3 text-slate-700">{labelInspirationSource(post.sourceType)}</td>
               <td className="px-3 py-3 font-medium text-slate-900">{post.competitorName}</td>
-              <td className="px-3 py-3 text-slate-600">{labelPlatform(post.platform)}</td>
-              <td className="px-3 py-3 text-slate-600">{format(new Date(post.publishedAt), "MMM d")}</td>
-              <td className="px-3 py-3 text-slate-600">{post.relativeScore.toFixed(2)}x</td>
-              <td className="px-3 py-3 text-slate-600">{post.format || "Unknown"}</td>
-              <td className="px-3 py-3 text-slate-600">
-                <p className="font-medium text-slate-800">{post.hook || post.theme || "Untitled pattern"}</p>
-                <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{post.visualPattern || post.notes}</p>
+              <td className="px-3 py-3 text-slate-700">{labelPlatform(post.platform)}</td>
+              <td className="px-3 py-3 text-slate-700">{format(new Date(post.publishedAt), "MMM d")}</td>
+              <td className="px-3 py-3 text-slate-700">{post.relativeScore.toFixed(2)}x</td>
+              <td className="px-3 py-3 text-slate-700">{post.format || "Unknown"}</td>
+              <td className="px-3 py-3 text-slate-700">
+                <p className="font-semibold text-slate-950">{post.hook || post.theme || "Untitled pattern"}</p>
+                <p className="mt-1 line-clamp-2 text-sm font-medium leading-6 text-slate-700">{post.visualPattern || post.notes}</p>
               </td>
-              <td className="px-3 py-3 text-xs leading-5 text-slate-500">
+              <td className="px-3 py-3 text-sm font-medium leading-6 text-slate-700">
                 {post.views} views · {post.likes} likes · {post.comments} comments · {post.saves} saves
               </td>
               <td className="px-3 py-3">
@@ -1377,7 +1377,7 @@ function ImageReferencePicker({
 }) {
   if (!assets.length) {
     return (
-      <p className="border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+      <p className="border border-dashed border-black/12 bg-white/45 p-4 text-[15px] font-medium leading-6 text-slate-700">
         Add image assets in Inputs to attach product, banner, or style references to this brief.
       </p>
     );
@@ -1385,10 +1385,10 @@ function ImageReferencePicker({
 
   return (
     <div className="grid gap-2">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Selected references</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Selected references</p>
       <div className="grid gap-2 md:grid-cols-2">
         {assets.map((asset) => (
-          <label key={asset.id} className="grid gap-1 border border-black/8 bg-white/65 p-3 text-sm text-slate-700">
+          <label key={asset.id} className="grid gap-1 border border-black/8 bg-white/65 p-3 text-[15px] font-medium text-slate-800">
             <span className="flex items-start gap-2">
               <input
                 name="imageReferenceIds"
@@ -1399,12 +1399,12 @@ function ImageReferencePicker({
               />
               <span className="min-w-0">
                 <span className="block font-medium tracking-[-0.02em] text-slate-900">{asset.name}</span>
-                <span className="block text-xs uppercase tracking-[0.16em] text-slate-500">{labelImageAssetType(asset.type)}</span>
+                <span className="block text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">{labelImageAssetType(asset.type)}</span>
               </span>
             </span>
-            <span className="break-all text-xs leading-5 text-slate-500">{asset.sourcePath}</span>
-            <span className="text-xs leading-5 text-slate-500">{referenceUsageHint(asset.type)}</span>
-            {asset.tags ? <span className="text-xs leading-5 text-slate-500">{asset.tags}</span> : null}
+            <span className="break-all text-sm leading-6 text-slate-700">{asset.sourcePath}</span>
+            <span className="text-sm leading-6 text-slate-700">{referenceUsageHint(asset.type)}</span>
+            {asset.tags ? <span className="text-sm leading-6 text-slate-700">{asset.tags}</span> : null}
           </label>
         ))}
       </div>
@@ -1431,7 +1431,7 @@ function referenceUsageHint(type: ImageAssetDto["type"]) {
 function PublishedPostHistoryTable({ posts }: { posts: PublishedPostDto[] }) {
   if (!posts.length) {
     return (
-      <p className="mt-4 border border-dashed border-black/12 bg-white/45 p-4 text-sm text-slate-600">
+      <p className="mt-4 border border-dashed border-black/12 bg-white/45 p-4 text-[15px] font-medium leading-6 text-slate-700">
         Add a TikTok or Instagram post link above to start building the performance history.
       </p>
     );
@@ -1461,10 +1461,10 @@ function PublishedPostHistoryTable({ posts }: { posts: PublishedPostDto[] }) {
         </thead>
         <tbody>
           {posts.map((post) => (
-            <tr key={post.id} className="border-b border-black/6 align-top">
-              <td className="px-3 py-3 text-slate-600">{format(new Date(post.capturedAt), "MMM d, HH:mm")}</td>
-              <td className="px-3 py-3 text-slate-600">{format(new Date(post.publishedAt), "MMM d, yyyy")}</td>
-              <td className="px-3 py-3 text-slate-600">{labelPlatform(post.platform)}</td>
+            <tr key={post.id} className="border-b border-black/6 align-top text-[15px] font-medium text-slate-800">
+              <td className="px-3 py-3 text-slate-700">{format(new Date(post.capturedAt), "MMM d, HH:mm")}</td>
+              <td className="px-3 py-3 text-slate-700">{format(new Date(post.publishedAt), "MMM d, yyyy")}</td>
+              <td className="px-3 py-3 text-slate-700">{labelPlatform(post.platform)}</td>
               <td className="px-3 py-3">
                 <a
                   href={post.postUrl}
@@ -1491,11 +1491,11 @@ function PublishedPostHistoryTable({ posts }: { posts: PublishedPostDto[] }) {
                   {post.title || post.postUrl}
                 </a>
                 {post.textPreview ? (
-                  <p className="mt-1 line-clamp-2 leading-6 text-slate-600">{post.textPreview}</p>
+                  <p className="mt-1 line-clamp-2 leading-6 text-slate-700">{post.textPreview}</p>
                 ) : null}
-                {post.notes ? <p className="mt-1 line-clamp-2 leading-6 text-slate-500">{post.notes}</p> : null}
+                {post.notes ? <p className="mt-1 line-clamp-2 leading-6 text-slate-700">{post.notes}</p> : null}
               </td>
-              <td className="px-3 py-3 text-slate-600">{post.format || "Unsorted"}</td>
+              <td className="px-3 py-3 text-slate-700">{post.format || "Unsorted"}</td>
               <MetricCell value={post.views} />
               <MetricCell value={post.reach} />
               <MetricCell value={post.likes} />
@@ -1520,8 +1520,8 @@ function MetricCell({ value }: { value: number }) {
 function SectionHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
     <div className="space-y-1">
-      <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">{eyebrow}</p>
-      <h2 className="text-xl font-semibold tracking-[-0.03em]">{title}</h2>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-600">{eyebrow}</p>
+      <h2 className="text-xl font-semibold tracking-[-0.03em] text-slate-950">{title}</h2>
     </div>
   );
 }
@@ -1546,14 +1546,14 @@ function Field({
   step?: number;
 }) {
   return (
-    <label className="grid gap-2 text-sm text-slate-700">
-      <span className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</span>
+    <label className="grid gap-2 text-sm font-medium text-slate-800">
+      <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">{label}</span>
       {textarea ? (
         <textarea
           name={name}
           defaultValue={defaultValue}
           rows={4}
-          className="rounded-[10px] border border-black/10 bg-white/85 px-3 py-2 leading-6 outline-none focus:border-slate-900"
+          className="min-h-[112px] rounded-[10px] border border-black/10 bg-white/90 px-3 py-2.5 text-[15px] font-medium leading-6 text-slate-950 outline-none placeholder:text-slate-400 focus:border-slate-900 md:text-base"
         />
       ) : (
         <input
@@ -1564,7 +1564,7 @@ function Field({
           max={max}
           step={step}
           inputMode={type === "number" ? "numeric" : undefined}
-          className="rounded-[10px] border border-black/10 bg-white/85 px-3 py-2 outline-none focus:border-slate-900"
+          className="rounded-[10px] border border-black/10 bg-white/90 px-3 py-2.5 text-[15px] font-medium leading-6 text-slate-950 outline-none placeholder:text-slate-400 focus:border-slate-900 md:text-base"
         />
       )}
     </label>
@@ -1585,13 +1585,13 @@ function SelectField({
   onChange?: (value: string) => void;
 }) {
   return (
-    <label className="grid gap-2 text-sm text-slate-700">
-      <span className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</span>
+    <label className="grid gap-2 text-sm font-medium text-slate-800">
+      <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">{label}</span>
       <select
         name={name}
         defaultValue={defaultValue}
         onChange={(event) => onChange?.(event.target.value)}
-        className="rounded-[10px] border border-black/10 bg-white/85 px-3 py-2 outline-none focus:border-slate-900"
+        className="rounded-[10px] border border-black/10 bg-white/90 px-3 py-2.5 text-[15px] font-medium leading-6 text-slate-950 outline-none focus:border-slate-900 md:text-base"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -1618,7 +1618,7 @@ function ModelRouteFields({
 }) {
   return (
     <div className="grid gap-3 rounded-[14px] border border-black/8 bg-white/55 p-3">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{title}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">{title}</p>
       <SelectField
         label="Provider"
         name={providerName}
@@ -1645,10 +1645,10 @@ function PacketSection({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{title}</p>
-      <div className={cn("grid gap-2 text-sm text-slate-700", inline && "grid-cols-2")}>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">{title}</p>
+      <div className={cn("grid gap-2 text-[15px] font-medium leading-7 text-slate-900", inline && "grid-cols-2")}>
         {items.map((item, index) => (
-          <p key={`${title}-${index}`} className="border-b border-black/6 pb-2 leading-6">
+          <p key={`${title}-${index}`} className="border-b border-black/6 pb-2">
             {item}
           </p>
         ))}
@@ -1660,8 +1660,8 @@ function PacketSection({
 function TextBlock({ title, body }: { title: string; body: string }) {
   return (
     <div className="space-y-2">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{title}</p>
-      <p className="text-sm leading-6 text-slate-700">{body}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">{title}</p>
+      <p className="text-[15px] font-medium leading-7 text-slate-900">{body}</p>
     </div>
   );
 }
