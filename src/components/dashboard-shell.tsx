@@ -328,7 +328,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
     const kind = isVideoPost(selectedPost) ? "video" : "image";
     const prompt = kind === "video"
       ? buildProductionVideoBrief(selectedPost, dashboard.profile, dashboard.imageAssets ?? [])
-      : buildProductionImagePrompt(selectedPost, dashboard.profile, dashboard.imageAssets ?? []);
+      : buildProductionImagePrompt(selectedPost, dashboard.imageAssets ?? []);
     setProductionPrompt({ postId: selectedPost.id, text: prompt, kind });
     setError(null);
 
@@ -999,7 +999,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                             <VisualReferenceCard key={image.id} image={image} theme={selectedPost.theme} />
                           ))
                         ) : (
-                          <p className="text-[15px] font-medium leading-6 text-slate-700">Visual references will appear here after generating the packet.</p>
+                          <p className="text-[15px] font-medium leading-6 text-slate-700">No relevant visual references are attached yet. Select product, style, banner, or competitor/social assets in the Image brief before regenerating the packet.</p>
                         )}
                       </div>
                     </div>
@@ -1782,7 +1782,7 @@ function isVideoPost(post: ContentPostDto) {
   return value.includes("reel") || value.includes("video") || value.includes("tiktok") || value.includes("short");
 }
 
-function buildProductionImagePrompt(post: ContentPostDto, profile: ProjectProfileDto, imageAssets: ImageAssetDto[]) {
+function buildProductionImagePrompt(post: ContentPostDto, imageAssets: ImageAssetDto[]) {
   const template = getImageTemplate(post.imageFormatKey);
   const selectedAssets = imageAssets.filter((asset) => post.imageReferenceIds.includes(asset.id));
   const productReferences = selectedAssets.filter((asset) => asset.type === "PRODUCT" || asset.type === "PRODUCT_ON_BODY");
@@ -1794,46 +1794,96 @@ function buildProductionImagePrompt(post: ContentPostDto, profile: ProjectProfil
     enforceImageObjects(post, post.imageObjects || buildDefaultObjects(post, selectedAssets), selectedAssets),
   );
   const impression = cleanPromptLine(post.imageImpression || "tasteful, modern, sensual but not explicit, social-ready, clear first-frame impact");
-  const brandName = trimPromptPunctuation(cleanPromptLine(profile.brandName || "ILARIA"));
-  const audience = trimPromptPunctuation(cleanPromptLine(profile.audience || "women 38-55"));
   const productReferenceLine = formatReferenceGroup(productReferences);
   const styleReferenceLine = formatReferenceGroup(styleReferences);
   const layoutReferenceLine = formatReferenceGroup(layoutReferences);
   const otherReferenceLine = formatReferenceGroup(otherReferences);
   const referenceInstruction = buildReferenceInstruction(productReferences, styleReferences, layoutReferences);
   const doNot = buildImageDoNotLine(post.imageFormatKey);
-  const platformUse = post.platform === "BOTH" ? "Instagram and TikTok" : labelPlatform(post.platform);
+  const mainPrompt = buildImageModelPromptSentence({
+    post,
+    template,
+    objects,
+    style,
+    impression,
+    productReferences,
+    styleReferences,
+    layoutReferences,
+  });
 
   return [
-    "TASK: Generate one finished, social-ready image. Do not create a moodboard, grid, mockup, contact sheet, or multiple alternatives.",
-    `BRAND/AUDIENCE: ${brandName}, ${audience}. Tasteful, confident, premium, for adult women.`,
-    `PLATFORM USE: ${platformUse}.`,
+    "IMAGE MODEL PROMPT",
+    mainPrompt,
     "",
-    `FORMAT: ${template.label}`,
-    `RESOLUTION: ${cleanPromptLine(post.imageResolution || template.resolution)}`,
-    `ASPECT/FRAME: ${template.aspect}`,
+    "OUTPUT SETTINGS",
+    `- Format: ${template.label}`,
+    `- Resolution: ${cleanPromptLine(post.imageResolution || template.resolution)}`,
+    `- Aspect ratio: ${template.aspect}`,
+    `- Text in image: none. Leave clean empty space only if typography will be added later.`,
     "",
-    `SUBJECT: ${objects}`,
-    `SUBJECT RULE: ${template.subjectRule}`,
-    `CONTENT CONTEXT: Theme is "${trimPromptPunctuation(cleanPromptLine(post.theme))}"; post idea is "${trimPromptPunctuation(cleanPromptLine(post.angle))}".`,
+    "VISUAL SPEC",
+    `- Subject: ${objects}`,
+    `- Composition: ${template.compositionRule}`,
+    `- Camera/framing: ${template.cameraRule}`,
+    `- Scene/background: ${buildSceneLine(post, selectedAssets)}`,
+    `- Lighting/color: warm refined light, realistic skin and fabric texture, premium editorial contrast, no harsh filters.`,
+    `- Mood: ${impression}`,
     "",
-    `MAIN STYLE: ${style}`,
-    `SCENE/BACKGROUND: ${buildSceneLine(post, selectedAssets)}`,
-    `COMPOSITION: ${template.compositionRule}`,
-    `CAMERA/FRAMING: ${template.cameraRule}`,
-    "LIGHTING/COLOR: warm refined light, realistic skin/fabric texture, premium editorial contrast, no harsh filters.",
-    `TYPOGRAPHY AREA: ${template.textRule}`,
+    "REFERENCE USE",
+    `- Product reference images: ${productReferenceLine}`,
+    `- Style/background references: ${styleReferenceLine}`,
+    `- Layout references: ${layoutReferenceLine}`,
+    otherReferences.length ? `- Other references: ${otherReferenceLine}` : "",
+    `- Rule: ${referenceInstruction}`,
     "",
-    `PRODUCT REFERENCES - copy garment/product truth exactly: ${productReferenceLine}`,
-    `STYLE REFERENCES - use only for mood, color, light, texture: ${styleReferenceLine}`,
-    `LAYOUT REFERENCES - use only for spacing and composition: ${layoutReferenceLine}`,
-    otherReferences.length ? `OTHER REFERENCES - use only if directly relevant: ${otherReferenceLine}` : "",
-    `REFERENCE HANDLING: ${referenceInstruction}`,
-    "",
-    `GENERAL IMPRESSION: ${impression}`,
-    `QUALITY BAR: photorealistic or premium editorial quality, polished enough for immediate social media publishing, clear focal point, believable materials, elegant adult mood.`,
-    `DO NOT: ${doNot}`,
+    "NEGATIVE PROMPT",
+    doNot,
   ].filter(Boolean).join("\n");
+}
+
+function buildImageModelPromptSentence({
+  post,
+  template,
+  objects,
+  style,
+  impression,
+  productReferences,
+  styleReferences,
+  layoutReferences,
+}: {
+  post: ContentPostDto;
+  template: (typeof IMAGE_FORMAT_TEMPLATES)[number];
+  objects: string;
+  style: string;
+  impression: string;
+  productReferences: ImageAssetDto[];
+  styleReferences: ImageAssetDto[];
+  layoutReferences: ImageAssetDto[];
+}) {
+  const productTruth = productReferences.length
+    ? `Use the selected product reference images as the exact garment/product source.`
+    : "Do not invent brand-specific garment details.";
+  const styleCue = styleReferences.length
+    ? "Use selected style references only for mood, light, color, and texture."
+    : "Use a clean premium editorial visual language.";
+  const layoutCue = layoutReferences.length
+    ? "Use selected layout references only for spacing and hierarchy."
+    : template.compositionRule;
+
+  return [
+    `${template.label} image for a social media post.`,
+    `Single finished image, not a collage of options.`,
+    `Main subject: ${objects}.`,
+    `Visual idea: ${cleanPromptLine(post.visualConcept || post.angle)}.`,
+    `Style: ${style}.`,
+    `Composition: ${layoutCue}`,
+    `Camera: ${template.cameraRule}.`,
+    `Lighting: warm refined editorial light, realistic fabric and skin texture, premium commercial finish.`,
+    `Mood: ${impression}.`,
+    productTruth,
+    styleCue,
+    "No readable text, no fake letters, no watermark.",
+  ].join(" ");
 }
 
 function buildProductionVideoBrief(post: ContentPostDto, profile: ProjectProfileDto, imageAssets: ImageAssetDto[]) {
@@ -2036,10 +2086,6 @@ function buildImageDoNotLine(formatKey: string) {
 
 function cleanPromptLine(value?: string) {
   return (value ?? "").replace(/\s+/g, " ").trim() || "not specified";
-}
-
-function trimPromptPunctuation(value: string) {
-  return value.replace(/[.;:,]+$/g, "").trim();
 }
 
 function splitAssetLines(value?: string) {

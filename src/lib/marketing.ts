@@ -36,142 +36,6 @@ import { safeArray, safeObject, splitLines, toLineBlock } from "@/lib/utils";
 
 const DEFAULT_PROJECT_ID = 1;
 const SETTINGS_ID = 1;
-const UNSPLASH_REFERENCE_PARAMS = "auto=format&fit=crop&w=1080&h=1350&q=82";
-
-const CURATED_VISUAL_REFERENCES: Record<string, CuratedVisualReference[]> = {
-  reelsCover: [
-    {
-      title: "Vertical fashion portrait with strong first-frame presence",
-      imagePath: unsplashReference("photo-1496747611176-843222e1e57c"),
-      source: "Unsplash internet reference",
-      role: "vertical crop, confident subject, cover-ready focal point",
-    },
-    {
-      title: "Editorial fashion portrait with clean negative space",
-      imagePath: unsplashReference("photo-1503342217505-b0a15ec3261c"),
-      source: "Unsplash internet reference",
-      role: "social cover composition, polished styling, simple background",
-    },
-    {
-      title: "Premium fashion mood with dramatic styling",
-      imagePath: unsplashReference("photo-1515886657613-9f3515b0c78f"),
-      source: "Unsplash internet reference",
-      role: "bold editorial silhouette and scroll-stopping contrast",
-    },
-    {
-      title: "Soft fashion portrait for tasteful adult mood",
-      imagePath: unsplashReference("photo-1529139574466-a303027c1d8b"),
-      source: "Unsplash internet reference",
-      role: "warm natural styling, calm face/body crop, refined mood",
-    },
-  ],
-  carousel: [
-    {
-      title: "Fashion detail and styling sequence reference",
-      imagePath: unsplashReference("photo-1512436991641-6745cdb1723f"),
-      source: "Unsplash internet reference",
-      role: "detail-led frame that can become one slide in a saveable carousel",
-    },
-    {
-      title: "Editorial portrait with room for headline",
-      imagePath: unsplashReference("photo-1487412720507-e7ab37603c6f"),
-      source: "Unsplash internet reference",
-      role: "simple composition, human presence, clean space for designed text",
-    },
-    {
-      title: "Wardrobe texture and product context",
-      imagePath: unsplashReference("photo-1489987707025-afc232f7ea0f"),
-      source: "Unsplash internet reference",
-      role: "closet/product context for practical fashion education",
-    },
-    {
-      title: "Minimal clothing rack color story",
-      imagePath: unsplashReference("photo-1523381210434-271e8be1f52b"),
-      source: "Unsplash internet reference",
-      role: "palette, wardrobe organization, and calm product support mood",
-    },
-  ],
-  offerBanner: [
-    {
-      title: "Clean fashion product still-life space",
-      imagePath: unsplashReference("photo-1489987707025-afc232f7ea0f"),
-      source: "Unsplash internet reference",
-      role: "commercial product context with negative space for offer typography",
-    },
-    {
-      title: "Minimal wardrobe/product arrangement",
-      imagePath: unsplashReference("photo-1523381210434-271e8be1f52b"),
-      source: "Unsplash internet reference",
-      role: "neat banner structure, product grouping, calm color field",
-    },
-    {
-      title: "Fashion detail with tactile material mood",
-      imagePath: unsplashReference("photo-1512436991641-6745cdb1723f"),
-      source: "Unsplash internet reference",
-      role: "close product detail and premium texture cue",
-    },
-  ],
-  productOnBody: [
-    {
-      title: "Product-on-body editorial crop reference",
-      imagePath: unsplashReference("photo-1496747611176-843222e1e57c"),
-      source: "Unsplash internet reference",
-      role: "person-led styling, posture, and garment visibility",
-    },
-    {
-      title: "Tasteful studio fashion portrait",
-      imagePath: unsplashReference("photo-1503342217505-b0a15ec3261c"),
-      source: "Unsplash internet reference",
-      role: "clean studio framing and social-ready product-on-body mood",
-    },
-    {
-      title: "Soft natural-light fashion styling",
-      imagePath: unsplashReference("photo-1529139574466-a303027c1d8b"),
-      source: "Unsplash internet reference",
-      role: "realistic warmth, adult elegance, non-explicit body crop",
-    },
-  ],
-  productStill: [
-    {
-      title: "Clothing texture and product detail reference",
-      imagePath: unsplashReference("photo-1512436991641-6745cdb1723f"),
-      source: "Unsplash internet reference",
-      role: "fabric, construction, and close product detail",
-    },
-    {
-      title: "Wardrobe product still-life reference",
-      imagePath: unsplashReference("photo-1489987707025-afc232f7ea0f"),
-      source: "Unsplash internet reference",
-      role: "product-only context, tactile wardrobe atmosphere",
-    },
-    {
-      title: "Minimal clothing rack product story",
-      imagePath: unsplashReference("photo-1523381210434-271e8be1f52b"),
-      source: "Unsplash internet reference",
-      role: "simple commercial layout and refined neutral product mood",
-    },
-  ],
-  graphicCollage: [
-    {
-      title: "Bold editorial fashion graphic mood",
-      imagePath: unsplashReference("photo-1515886657613-9f3515b0c78f"),
-      source: "Unsplash internet reference",
-      role: "high-contrast editorial energy for collage direction",
-    },
-    {
-      title: "Fashion portrait with graphic negative space",
-      imagePath: unsplashReference("photo-1487412720507-e7ab37603c6f"),
-      source: "Unsplash internet reference",
-      role: "human anchor plus space for later graphic typography",
-    },
-    {
-      title: "Wardrobe texture for collage layering",
-      imagePath: unsplashReference("photo-1489987707025-afc232f7ea0f"),
-      source: "Unsplash internet reference",
-      role: "texture layer, product detail, and tactile collage base",
-    },
-  ],
-};
 
 type PostWithRelations = ContentPost & {
   packet: CampaignPacket | null;
@@ -222,7 +86,7 @@ interface GeneratedPacket {
   reviewChecklist: string[];
 }
 
-interface CuratedVisualReference {
+interface VisualReferenceCandidate {
   title: string;
   imagePath: string;
   source: string;
@@ -969,7 +833,7 @@ export async function generatePostPacket(postId: string) {
     },
   });
 
-  await saveVisualReferenceImages(post, packet, profile);
+  await saveVisualReferenceImages(post, packet);
 
   await prisma.contentPost.update({
     where: { id: postId },
@@ -1052,7 +916,7 @@ export async function renderPostImages(postId: string) {
   return getDashboardState(post.projectId);
 }
 
-async function saveVisualReferenceImages(post: ContentPost, packet: GeneratedPacket, profile: ProjectProfile) {
+async function saveVisualReferenceImages(post: ContentPost, packet: GeneratedPacket) {
   try {
     const socialAssets = await prisma.imageAsset.findMany({
       where: {
@@ -1060,21 +924,23 @@ async function saveVisualReferenceImages(post: ContentPost, packet: GeneratedPac
         isActive: true,
       },
     });
-    const references = await findVisualReferenceImages(post, packet, profile, socialAssets);
+    const references = await findVisualReferenceImages(post, packet, socialAssets);
 
     await prisma.$transaction(async (tx) => {
       await tx.generatedImage.deleteMany({
         where: { postId: post.id },
       });
 
-      await tx.generatedImage.createMany({
-        data: references.map((reference) => ({
-          postId: post.id,
-          prompt: reference.prompt,
-          imagePath: reference.imagePath,
-          variant: reference.variant,
-        })),
-      });
+      if (references.length) {
+        await tx.generatedImage.createMany({
+          data: references.map((reference) => ({
+            postId: post.id,
+            prompt: reference.prompt,
+            imagePath: reference.imagePath,
+            variant: reference.variant,
+          })),
+        });
+      }
     });
   } catch (error) {
     console.warn("Visual reference search failed.", error);
@@ -1084,14 +950,13 @@ async function saveVisualReferenceImages(post: ContentPost, packet: GeneratedPac
 async function findVisualReferenceImages(
   post: ContentPost,
   packet: GeneratedPacket,
-  profile: ProjectProfile,
   socialAssets: ImageAsset[],
 ) {
   const references = [
+    ...selectPostImageAssetReferences(post, socialAssets),
     ...selectCompetitorSocialReferences(post, packet, socialAssets),
-    ...selectCuratedVisualReferences(post, packet, profile),
   ];
-  const uniqueReferences: CuratedVisualReference[] = [];
+  const uniqueReferences: VisualReferenceCandidate[] = [];
 
   for (const reference of references) {
     if (!uniqueReferences.some((selected) => selected.imagePath === reference.imagePath)) {
@@ -1136,6 +1001,48 @@ function selectCompetitorSocialReferences(post: ContentPost, packet: GeneratedPa
       source: detectSocialReferenceSource(asset.sourcePath),
       role: buildCompetitorReferenceRole(asset),
     }));
+}
+
+function selectPostImageAssetReferences(post: ContentPost, assets: ImageAsset[]) {
+  const selectedIds = new Set(safeArray(post.imageReferenceIds));
+
+  return assets
+    .filter((asset) => selectedIds.has(asset.id) && asset.sourcePath.trim())
+    .map((asset) => ({
+      title: `Selected ${labelImageAssetTypeForPrompt(asset.type)}: ${asset.name}`,
+      imagePath: asset.sourcePath,
+      source: "Selected project visual reference",
+      role: buildSelectedAssetReferenceRole(asset),
+    }));
+}
+
+function labelImageAssetTypeForPrompt(type: ImageAssetType) {
+  if (type === ImageAssetType.PRODUCT) return "product reference";
+  if (type === ImageAssetType.PRODUCT_ON_BODY) return "product-on-body reference";
+  if (type === ImageAssetType.STYLE_REFERENCE) return "style reference";
+  if (type === ImageAssetType.BANNER_REFERENCE) return "layout/banner reference";
+  if (type === ImageAssetType.BACKGROUND) return "background reference";
+  return "reference";
+}
+
+function buildSelectedAssetReferenceRole(asset: ImageAsset) {
+  const details = [asset.description, asset.productCategory, asset.colors, asset.tags, asset.notes]
+    .filter(Boolean)
+    .join("; ");
+
+  if (asset.type === ImageAssetType.PRODUCT || asset.type === ImageAssetType.PRODUCT_ON_BODY) {
+    return `${details || "Use as product truth."} Preserve product shape, color, fabric, construction, and fit truth.`;
+  }
+
+  if (asset.type === ImageAssetType.BANNER_REFERENCE) {
+    return `${details || "Use as layout direction."} Use spacing, hierarchy, and composition only; do not copy text.`;
+  }
+
+  if (asset.type === ImageAssetType.STYLE_REFERENCE || asset.type === ImageAssetType.BACKGROUND) {
+    return `${details || "Use as style direction."} Use mood, palette, lighting, texture, and atmosphere only.`;
+  }
+
+  return details || "Use only if directly relevant to this publication.";
 }
 
 function isCompetitorSocialAsset(asset: ImageAsset) {
@@ -1204,63 +1111,8 @@ function buildCompetitorReferenceRole(asset: ImageAsset) {
   return "Use the social-native composition, hook placement, cover idea, or carousel logic as inspiration.";
 }
 
-function selectCuratedVisualReferences(post: ContentPost, packet: GeneratedPacket, profile: ProjectProfile) {
-  const context = `${profile.brandName} ${post.theme} ${post.format} ${packet.visualBrief}`.toLowerCase();
-  const pool = getCuratedReferencePool(post.imageFormatKey, context);
-  const offset = stableReferenceLock(`${post.id}-${packet.coreAngle}-${post.imageFormatKey}`) % pool.length;
-  const selected: CuratedVisualReference[] = [];
-
-  for (let index = 0; selected.length < 3 && index < pool.length * 2; index += 1) {
-    const candidate = pool[(offset + index) % pool.length];
-
-    if (!selected.some((reference) => reference.imagePath === candidate.imagePath)) {
-      selected.push(candidate);
-    }
-  }
-
-  return selected;
-}
-
-function stableReferenceLock(value: string) {
-  let hash = 0;
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
-  }
-
-  return (hash % 100000) + 1;
-}
-
 function normalizeReferenceText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9а-яё]+/gi, " ").replace(/\s+/g, " ").trim();
-}
-
-function getCuratedReferencePool(formatKey: string, context: string) {
-  if (formatKey === "product_still" || context.includes("fabric") || context.includes("detail")) {
-    return CURATED_VISUAL_REFERENCES.productStill;
-  }
-
-  if (formatKey === "product_on_body") {
-    return CURATED_VISUAL_REFERENCES.productOnBody;
-  }
-
-  if (formatKey === "offer_banner") {
-    return CURATED_VISUAL_REFERENCES.offerBanner;
-  }
-
-  if (formatKey === "graphic_collage") {
-    return CURATED_VISUAL_REFERENCES.graphicCollage;
-  }
-
-  if (formatKey === "carousel") {
-    return CURATED_VISUAL_REFERENCES.carousel;
-  }
-
-  return CURATED_VISUAL_REFERENCES.reelsCover;
-}
-
-function unsplashReference(photoId: string) {
-  return `https://images.unsplash.com/${photoId}?${UNSPLASH_REFERENCE_PARAMS}`;
 }
 
 export async function savePostReview(postId: string, input: Metrics & { manualVerdict: ManualVerdict; manualNote: string }) {
