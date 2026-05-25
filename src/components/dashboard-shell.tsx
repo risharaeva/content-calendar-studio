@@ -767,7 +767,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                     <Field label="Image model" name="imageModel" defaultValue={dashboard.settings.imageModel} />
                     <Field label="Local image endpoint" name="localImageEndpoint" defaultValue={dashboard.settings.localImageEndpoint} />
                     <div className="rounded-[12px] border border-black/8 bg-white/70 p-3 text-sm font-medium leading-6 text-slate-700">
-                      Local rendering is treated as a draft preview unless it points to a production ComfyUI, FLUX, or SDXL workflow. Use the production prompt for final social-ready images.
+                      Ollama and local image endpoints only run on this computer. On Vercel, choose OpenAI/Anthropic for hosted AI text, or the app will use metric-based fallback logic for recommendations. Local rendering is treated as a draft preview unless it points to a production ComfyUI, FLUX, or SDXL workflow.
                     </div>
                     <ActionButton type="submit" tone="secondary" disabled={isBusy}>
                       Save settings

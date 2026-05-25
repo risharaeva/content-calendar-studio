@@ -1595,9 +1595,7 @@ async function buildRecommendations(
       }));
     }
   } catch (error) {
-    if (error instanceof Error && error.name === "OllamaUnavailableError") {
-      throw error;
-    }
+    console.warn("Recommendation generation fell back to published performance heuristics.", error);
   }
 
   return buildRecommendationFallback(topPatterns);
