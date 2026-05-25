@@ -801,8 +801,21 @@ export async function generatePostPacket(postId: string) {
     prisma.projectProfile.findUniqueOrThrow({ where: { projectId: post.projectId } }),
     prisma.appSettings.findUniqueOrThrow({ where: { id: SETTINGS_ID } }),
   ]);
+  const competitorPosts = await prisma.competitorPost.findMany({
+    where: {
+      projectId: post.projectId,
+      isActive: true,
+      capturedAt: {
+        gte: subDays(new Date(), 90),
+      },
+    },
+    orderBy: {
+      capturedAt: "desc",
+    },
+  });
+  const captionPatterns = selectCaptionInspirationPatterns(post, buildCompetitorPlanPatterns(competitorPosts));
 
-  const packet = await buildPacket(post, profile, settings);
+  const packet = await buildPacket(post, profile, settings, captionPatterns);
 
   await prisma.campaignPacket.upsert({
     where: { postId },
@@ -1332,8 +1345,10 @@ async function buildPacket(
   post: ContentPost,
   profile: ProjectProfile,
   settings: AppSettings,
+  captionPatterns: CompetitorPlanPattern[] = [],
 ) {
   const normalizedProfile = normalizeProfile(profile);
+  const captionStyleGuide = buildCaptionStyleGuide(captionPatterns);
 
   try {
     const packet = await generateJsonWithTextRoute<GeneratedPacket>({
@@ -1363,8 +1378,17 @@ async function buildPacket(
         `Product reference folder/file: ${normalizedProfile.productReferenceUrl}`,
         `Banner/layout reference folder/file: ${normalizedProfile.bannerReferenceUrl}`,
         `Layout reference notes: ${normalizedProfile.layoutReferenceNotes}`,
+        `Caption inspiration patterns to adapt, not copy: ${captionStyleGuide || "none captured yet"}`,
         'Return one object with keys objective, coreAngle, hookVariants (3 strings), captionVariants (2 strings), ctaVariants (2 strings), hashtagSet (4 strings), visualBrief, imagePromptVariants (2 strings), reviewChecklist (3 strings).',
-        "Make the copy operational and ready to use.",
+        "Caption rules:",
+        "- Captions must sound social-native, specific, and human, not like brand manifesto copy.",
+        "- Use one concrete opening line from the post angle, then a short useful observation, proof, or fit logic.",
+        "- Adapt competitor/inspiration mechanics only as structure: hook shape, comment cue, offer cue, proof rhythm, or saveable framing. Do not copy competitor wording.",
+        "- For reels: caption should be short, witty, and easy to pair with a cover hook.",
+        "- For carousels: caption should tell people why to save or swipe, then add one practical takeaway.",
+        "- For banners/offers: caption should connect the offer to a real-life reason to act now, not shout generic discount language.",
+        "- Avoid generic lines like 'discover comfort', 'feel confident', 'upgrade your wardrobe', 'designed for every body', or 'embrace your curves'.",
+        "Make the copy operational and ready to paste into Instagram/TikTok.",
       ].join("\n"),
     });
 
@@ -1374,13 +1398,13 @@ async function buildPacket(
       Array.isArray(packet.imagePromptVariants) &&
       packetLooksUsable(packet)
     ) {
-      return normalizePacket(packet, post);
+      return normalizePacket(packet, post, normalizedProfile, captionPatterns);
     }
   } catch (error) {
     console.warn("Campaign packet generation fell back to local ILARIA strategy.", error);
   }
 
-  return buildPacketFallback(post, normalizedProfile);
+  return buildPacketFallback(post, normalizedProfile, captionPatterns);
 }
 
 async function buildRecommendations(
@@ -1496,6 +1520,114 @@ function buildCompetitorPlanPatterns(posts: CompetitorPost[]) {
     .filter((pattern) => pattern.relativeScore >= 0.9)
     .toSorted((a, b) => b.relativeScore - a.relativeScore)
     .slice(0, 15);
+}
+
+function selectCaptionInspirationPatterns(post: ContentPost, patterns: CompetitorPlanPattern[]) {
+  const postContext = normalizeReferenceText(`${post.theme} ${post.format} ${post.goal} ${post.angle} ${post.visualConcept}`);
+
+  return patterns
+    .map((pattern) => {
+      const patternContext = normalizeReferenceText(
+        `${pattern.sourceType} ${pattern.competitorName} ${pattern.platform} ${pattern.format} ${pattern.theme} ${pattern.hook} ${pattern.visualPattern} ${pattern.offer} ${pattern.cta} ${pattern.notes}`,
+      );
+      const postTerms = Array.from(new Set(postContext.split(" ").filter((term) => term.length > 3)));
+      const overlap = postTerms.reduce((score, term) => score + (patternContext.includes(term) ? 1 : 0), 0);
+      const formatBoost = normalizeReferenceText(pattern.format).includes(normalizeReferenceText(post.format)) ? 3 : 0;
+      const platformBoost = pattern.platform === post.platform || post.platform === Platform.BOTH || pattern.platform === Platform.BOTH ? 2 : 0;
+
+      return {
+        pattern,
+        score: overlap + formatBoost + platformBoost + pattern.relativeScore,
+      };
+    })
+    .toSorted((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map((item) => item.pattern);
+}
+
+function buildCaptionStyleGuide(patterns: CompetitorPlanPattern[]) {
+  if (!patterns.length) {
+    return "";
+  }
+
+  return JSON.stringify(patterns.map((pattern) => ({
+    source: pattern.competitorName || pattern.sourceType,
+    relativeScore: pattern.relativeScore,
+    format: pattern.format,
+    theme: pattern.theme,
+    hookMechanic: pattern.hook,
+    captionOrNotesMechanic: pattern.notes,
+    cta: pattern.cta,
+    offer: pattern.offer,
+    visualPattern: pattern.visualPattern,
+  })));
+}
+
+function buildCaptionFallbacks(
+  post: ContentPost,
+  profile: NormalizedProfile,
+  captionPatterns: CompetitorPlanPattern[],
+) {
+  const lead = normalizeCaptionSentence(post.angle);
+  const proofLine = buildCaptionProofLine(post);
+  const ctaCue = captionPatterns.find((pattern) => pattern.cta.trim())?.cta.trim();
+  const offerCue = captionPatterns.find((pattern) => pattern.offer.trim())?.offer.trim();
+  const inspirationHook = captionPatterns.find((pattern) => pattern.hook.trim())?.hook.trim();
+  const firstCta = ctaCue || "Save this before your next outfit decision.";
+  const secondCta = post.format.toLowerCase().includes("carousel")
+    ? "Swipe through it now, save it for the fitting-room moment later."
+    : "Save it for the next morning when the outfit is right and the base layer is negotiating.";
+
+  if (post.format.toLowerCase().includes("carousel")) {
+    return [
+      `${lead}\n\n${proofLine}\n\nThe useful part is not the theory. It is knowing what to check before you order.\n\n${firstCta}`,
+      `${inspirationHook ? `${normalizeCaptionSentence(inspirationHook)}\n\n` : ""}${post.theme} should be practical enough to save, not vague enough to scroll past.\n\nStart with the day you actually have, then choose the support level around that.\n\n${secondCta}`,
+    ];
+  }
+
+  if (post.format.toLowerCase().includes("banner") || post.format.toLowerCase().includes("offer")) {
+    return [
+      `${lead}\n\n${proofLine}\n\n${offerCue ? `${normalizeCaptionSentence(offerCue)} ` : ""}Use the offer when the product solves a real getting-dressed problem, not because a banner shouted at you.\n\n${firstCta}`,
+      `${post.theme} works best when the reason to buy is specific: fit, long wear, smoother lines, or one less outfit problem.\n\n${secondCta}`,
+    ];
+  }
+
+  return [
+    `${lead}\n\n${proofLine}\n\nThat is the difference between a piece that only looks good in the mirror and one that survives the actual day.\n\n${firstCta}`,
+    `${inspirationHook ? `${normalizeCaptionSentence(inspirationHook)}\n\n` : ""}${profile.brandName} note: support should make the outfit easier, not louder.\n\nKeep the body. Improve the base layer.\n\n${secondCta}`,
+  ];
+}
+
+function buildCaptionProofLine(post: ContentPost) {
+  const text = `${post.theme} ${post.angle} ${post.visualConcept} ${post.tiktokExecution} ${post.instagramExecution}`.toLowerCase();
+
+  if (text.includes("review") || text.includes("proof") || text.includes("comment")) {
+    return "The proof is in what people mention after wearing it for more than five minutes.";
+  }
+
+  if (text.includes("size") || text.includes("fit")) {
+    return "The point is not guessing smaller. It is choosing the size that still works when you sit, move, and breathe.";
+  }
+
+  if (text.includes("offer") || text.includes("shop") || text.includes("exchange")) {
+    return "The practical reassurance matters: easy support, clearer sizing, and less risk in the first order.";
+  }
+
+  if (text.includes("banner") || text.includes("product") || text.includes("detail")) {
+    return "The product detail should do a job: support, smooth, stay put, or make the outfit easier.";
+  }
+
+  return "The real test is not the first mirror check. It is what still feels good halfway through the day.";
+}
+
+function normalizeCaptionSentence(value: string) {
+  const trimmed = value.replace(/\s+/g, " ").trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
 
 function scoreCompetitorPost(post: Pick<CompetitorPost, "views" | "likes" | "comments" | "shares" | "saves">) {
@@ -1676,8 +1808,13 @@ function adaptCompetitorHook(pattern: CompetitorPlanPattern) {
   return `A ${pattern.competitorName} pattern overperformed; rebuild it around support without punishment.`;
 }
 
-function buildPacketFallback(post: ContentPost, profile: NormalizedProfile): GeneratedPacket {
+function buildPacketFallback(
+  post: ContentPost,
+  profile: NormalizedProfile,
+  captionPatterns: CompetitorPlanPattern[] = [],
+): GeneratedPacket {
   const lowerTheme = post.theme.toLowerCase();
+  const captionVariants = buildCaptionFallbacks(post, profile, captionPatterns);
 
   return {
     objective: `${post.goal}: make ${lowerTheme} feel recognizable, useful, and desirable without body-fixing language.`,
@@ -1687,10 +1824,7 @@ function buildPacketFallback(post: ContentPost, profile: NormalizedProfile): Gen
       `The small ${lowerTheme} detail that changes the whole day.`,
       `Support should make the outfit easier, not louder.`,
     ],
-    captionVariants: [
-      `${post.angle} A good base layer should help the day feel calmer, not turn getting dressed into another negotiation.`,
-      `${profile.brandName} is built around support without punishment: smoother lines, easier long wear, and fit logic that respects the body you have now.`,
-    ],
+    captionVariants,
     ctaVariants: ["Save this before your next outfit decision.", "Comment FIT if you want help choosing your first size."],
     hashtagSet: ["#comfortfirst", "#brafit", "#shapewear", "#over40style"],
     visualBrief: `${post.visualConcept || "Use a full-bleed, soft sensual modern visual with one clear hook and one proof detail."} TikTok: ${post.tiktokExecution || "Lead with recognition."} Instagram: ${post.instagramExecution || "Polish the cover and make it saveable."}`,
@@ -1989,12 +2123,22 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function normalizePacket(packet: GeneratedPacket, post: ContentPost): GeneratedPacket {
+function normalizePacket(
+  packet: GeneratedPacket,
+  post: ContentPost,
+  profile: NormalizedProfile,
+  captionPatterns: CompetitorPlanPattern[] = [],
+): GeneratedPacket {
+  const fallbackCaptions = buildCaptionFallbacks(post, profile, captionPatterns);
+  const captions = safeArray(packet.captionVariants)
+    .filter((caption) => captionLooksSpecific(caption))
+    .slice(0, 2);
+
   return {
     objective: safeText(packet.objective) || post.goal,
     coreAngle: safeText(packet.coreAngle) || post.angle,
     hookVariants: safeArray(packet.hookVariants).slice(0, 3),
-    captionVariants: safeArray(packet.captionVariants).slice(0, 2),
+    captionVariants: captions.length >= 2 ? captions : fallbackCaptions,
     ctaVariants: safeArray(packet.ctaVariants).slice(0, 2),
     hashtagSet: safeArray(packet.hashtagSet).slice(0, 6),
     visualBrief: safeText(packet.visualBrief) || "Use a clean, believable scene with a premium editorial feel.",
@@ -2004,8 +2148,15 @@ function normalizePacket(packet: GeneratedPacket, post: ContentPost): GeneratedP
 }
 
 function packetLooksUsable(packet: GeneratedPacket) {
-  const banned = /\b(goddess|sexy|unapologetic|empower|empowering|transform your body|hide flaws|perfect hourglass|bodylove|body love|confidence boost|upgrade your fit game|choose ilaria)\b/i;
+  const banned = /\b(goddess|sexy|unapologetic|empower|empowering|transform your body|hide flaws|perfect hourglass|bodylove|body love|confidence boost|upgrade your fit game|choose ilaria|discover comfort|embrace your curves|designed for every body)\b/i;
   return !banned.test(Object.values(packet).map((value) => safeText(value)).join(" "));
+}
+
+function captionLooksSpecific(caption: string) {
+  const text = caption.trim();
+  const generic = /\b(discover comfort|embrace your curves|feel confident|upgrade your wardrobe|designed for every body|choose ilaria|perfect for any occasion|elevate your everyday|style meets comfort)\b/i;
+
+  return text.length >= 80 && !generic.test(text);
 }
 
 function buildAngle(theme: string, goal: string, brandName: string, index: number) {
