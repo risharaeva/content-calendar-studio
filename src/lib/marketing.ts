@@ -94,13 +94,6 @@ interface GeneratedPacket {
   reviewChecklist: string[];
 }
 
-interface VisualReferenceCandidate {
-  title: string;
-  imagePath: string;
-  source: string;
-  role: string;
-}
-
 interface RecommendationSeed {
   theme: string;
   goal: string;
@@ -968,8 +961,6 @@ export async function generatePostPacket(postId: string) {
     },
   });
 
-  await saveVisualReferenceImages(post, packet);
-
   await prisma.contentPost.update({
     where: { id: postId },
     data: {
@@ -980,7 +971,7 @@ export async function generatePostPacket(postId: string) {
   return getDashboardState(post.projectId);
 }
 
-export async function renderPostImages(postId: string) {
+export async function renderPostImages(postId: string, mode = "cover") {
   const [post, settings] = await Promise.all([
     prisma.contentPost.findUnique({
       where: { id: postId },
@@ -995,7 +986,15 @@ export async function renderPostImages(postId: string) {
     throw new Error("Generate a campaign packet before rendering images.");
   }
 
+  const postWithPacket = post as ContentPost & { packet: CampaignPacket };
   const prompts = safeArray(post.packet.imagePromptVariants);
+  const renderMode = normalizeRenderMode(mode, post);
+
+  if (renderMode === "carousel") {
+    await replaceGeneratedImages(postId, buildCarouselSlideImages(postWithPacket));
+    return getDashboardState(post.projectId);
+  }
+
   const referenceImages = await prisma.imageAsset.findMany({
     where: {
       projectId: post.projectId,
@@ -1006,13 +1005,15 @@ export async function renderPostImages(postId: string) {
     },
   });
 
-  if (prompts.length < 2) {
-    throw new Error("The packet must contain two image prompts before rendering.");
+  const promptsToRender = buildShootStudioRenderPrompts(postWithPacket, prompts, renderMode);
+
+  if (!promptsToRender.length) {
+    throw new Error("The packet must contain image prompts before rendering.");
   }
 
   const images: Array<{ prompt: string; imagePath: string; variant: number }> = [];
 
-  for (const [index, prompt] of prompts.slice(0, 2).entries()) {
+  for (const [index, prompt] of promptsToRender.entries()) {
     const imagePath = await renderPromptToImage({
       prompt,
       postId,
@@ -1033,6 +1034,54 @@ export async function renderPostImages(postId: string) {
     });
   }
 
+  await replaceGeneratedImages(postId, images);
+
+  return getDashboardState(post.projectId);
+}
+
+function normalizeRenderMode(mode: string, post: ContentPost) {
+  const value = mode.toLowerCase();
+
+  if (value === "carousel") return "carousel";
+  if (value === "scene_refs") return "scene_refs";
+  if (value === "image") return post.imageFormatKey === "carousel" || post.format.toLowerCase().includes("carousel") ? "carousel" : "cover";
+
+  return "cover";
+}
+
+function buildShootStudioRenderPrompts(post: ContentPost & { packet: CampaignPacket }, prompts: string[], mode: string) {
+  const seedPrompt = prompts[0] || post.packet.visualBrief || post.visualConcept || post.angle;
+
+  if (mode === "scene_refs") {
+    return [
+      [
+        seedPrompt,
+        `Scene reference 1: first-frame / cover scene for "${post.theme}".`,
+        "Make it useful as a filming reference: clear composition, adult model, product readable, no text.",
+      ].join("\n"),
+      [
+        seedPrompt,
+        `Scene reference 2: problem or tension moment for "${post.angle}".`,
+        "Show the real-life situation clearly, tasteful and social-ready, no text.",
+      ].join("\n"),
+      [
+        seedPrompt,
+        `Scene reference 3: product proof / detail moment for "${post.goal}".`,
+        "Focus on product logic, fabric, fit, comfort, or outfit use. No text.",
+      ].join("\n"),
+    ];
+  }
+
+  return [
+    [
+      seedPrompt,
+      `Cover image for "${post.theme}".`,
+      "Create one strong social first-frame image. Leave clean negative space for typography added later. No text in the image.",
+    ].join("\n"),
+  ];
+}
+
+async function replaceGeneratedImages(postId: string, images: Array<{ prompt: string; imagePath: string; variant: number }>) {
   await prisma.$transaction(async (tx) => {
     await tx.generatedImage.deleteMany({
       where: { postId },
@@ -1047,203 +1096,151 @@ export async function renderPostImages(postId: string) {
       })),
     });
   });
-
-  return getDashboardState(post.projectId);
 }
 
-async function saveVisualReferenceImages(post: ContentPost, packet: GeneratedPacket) {
-  try {
-    const socialAssets = await prisma.imageAsset.findMany({
-      where: {
-        projectId: post.projectId,
-        isActive: true,
-      },
-    });
-    const references = await findVisualReferenceImages(post, packet, socialAssets);
+function buildCarouselSlideImages(post: ContentPost & { packet: CampaignPacket }) {
+  const slides = buildCarouselSlideCopy(post);
 
-    await prisma.$transaction(async (tx) => {
-      await tx.generatedImage.deleteMany({
-        where: { postId: post.id },
-      });
-
-      if (references.length) {
-        await tx.generatedImage.createMany({
-          data: references.map((reference) => ({
-            postId: post.id,
-            prompt: reference.prompt,
-            imagePath: reference.imagePath,
-            variant: reference.variant,
-          })),
-        });
-      }
-    });
-  } catch (error) {
-    console.warn("Visual reference search failed.", error);
-  }
-}
-
-async function findVisualReferenceImages(
-  post: ContentPost,
-  packet: GeneratedPacket,
-  socialAssets: ImageAsset[],
-) {
-  const references = [
-    ...selectPostImageAssetReferences(post, socialAssets),
-    ...selectCompetitorSocialReferences(post, packet, socialAssets),
-  ];
-  const uniqueReferences: VisualReferenceCandidate[] = [];
-
-  for (const reference of references) {
-    if (!uniqueReferences.some((selected) => selected.imagePath === reference.imagePath)) {
-      uniqueReferences.push(reference);
-    }
-
-    if (uniqueReferences.length >= 3) {
-      break;
-    }
-  }
-
-  return uniqueReferences.map((reference, index) => ({
-    imagePath: reference.imagePath,
-    prompt: `${reference.title}. Source: ${reference.source}. Direction: ${reference.role}. Matched to "${post.theme}" / "${packet.coreAngle}". Use as a mood, composition, crop, and styling reference only, not as final brand artwork.`,
+  return slides.map((slide, index) => ({
+    prompt: `${slide.kicker}: ${slide.title}${slide.body ? ` - ${slide.body}` : ""}`,
+    imagePath: svgDataUrl(renderCarouselSlideSvg(slide, index, slides.length, post)),
     variant: index + 1,
   }));
 }
 
-function selectCompetitorSocialReferences(post: ContentPost, packet: GeneratedPacket, assets: ImageAsset[]) {
-  const context = normalizeReferenceText(
-    `${post.theme} ${post.format} ${post.angle} ${post.visualConcept} ${post.imageFormatKey} ${packet.visualBrief}`,
-  );
+function buildCarouselSlideCopy(post: ContentPost & { packet: CampaignPacket }) {
+  const hooks = safeArray(post.packet.hookVariants);
+  const captions = safeArray(post.packet.captionVariants);
+  const ctas = safeArray(post.packet.ctaVariants);
+  const hook = cleanCarouselLine(hooks[0] || post.angle || post.theme);
+  const secondHook = cleanCarouselLine(hooks[1] || post.packet.coreAngle || post.angle);
+  const core = cleanCarouselLine(post.packet.coreAngle || post.angle);
+  const captionTakeaway = cleanCarouselLine(captions[0] || post.instagramExecution || post.tiktokExecution || post.packet.visualBrief);
+  const cta = cleanCarouselLine(ctas[0] || "Save this before your next order.");
 
-  return assets
-    .filter(isCompetitorSocialAsset)
-    .map((asset) => ({
-      asset,
-      score: scoreCompetitorSocialAsset(asset, context, post.imageFormatKey),
-    }))
-    .filter((item) => item.score > 0)
-    .sort((first, second) => {
-      if (second.score !== first.score) {
-        return second.score - first.score;
-      }
-
-      return first.asset.name.localeCompare(second.asset.name);
-    })
-    .slice(0, 3)
-    .map(({ asset }) => ({
-      title: `Competitor/social reference: ${asset.name}`,
-      imagePath: asset.sourcePath,
-      source: detectSocialReferenceSource(asset.sourcePath),
-      role: buildCompetitorReferenceRole(asset),
-    }));
+  return [
+    {
+      kicker: "Slide 01",
+      title: hook,
+      body: "A small fit clue that changes the whole decision.",
+      footer: "Swipe",
+    },
+    {
+      kicker: "Slide 02",
+      title: secondHook,
+      body: "The mirror gives one version. Movement, sitting, and real clothes give another.",
+      footer: "Reality check",
+    },
+    {
+      kicker: "Slide 03",
+      title: core,
+      body: "Look for pressure, rolling, straps, fabric tension, and where the garment goes after ten minutes.",
+      footer: "Fit logic",
+    },
+    {
+      kicker: "Slide 04",
+      title: cleanCarouselLine(post.visualConcept || post.packet.visualBrief || post.goal),
+      body: captionTakeaway,
+      footer: "ILARIA note",
+    },
+    {
+      kicker: "Slide 05",
+      title: cta,
+      body: "Use this as a calm shopping rule, not a body judgment.",
+      footer: "Save",
+    },
+  ];
 }
 
-function selectPostImageAssetReferences(post: ContentPost, assets: ImageAsset[]) {
-  const selectedIds = new Set(safeArray(post.imageReferenceIds));
+function renderCarouselSlideSvg(
+  slide: { kicker: string; title: string; body: string; footer: string },
+  index: number,
+  total: number,
+  post: ContentPost,
+) {
+  const palettes = [
+    { bg: "#fff7ef", panel: "#f0ded2", ink: "#1f2933", accent: "#9d5c46", soft: "#f8eadf" },
+    { bg: "#f4f7f2", panel: "#dce8d9", ink: "#1f2933", accent: "#526f5a", soft: "#eef4ea" },
+    { bg: "#f7f3ea", panel: "#e4d5bd", ink: "#1f2933", accent: "#7b6046", soft: "#f0e6d5" },
+    { bg: "#f2f6f8", panel: "#d7e5e8", ink: "#1f2933", accent: "#4d7480", soft: "#eaf2f4" },
+    { bg: "#fffaf4", panel: "#e8d7c9", ink: "#1f2933", accent: "#8b5146", soft: "#f7ede3" },
+  ];
+  const palette = palettes[index % palettes.length];
+  const titleLines = wrapSvgText(slide.title, 22, 5);
+  const bodyLines = wrapSvgText(slide.body, 44, 5);
+  const visualLines = wrapSvgText(post.goal, 28, 2);
 
-  return assets
-    .filter((asset) => selectedIds.has(asset.id) && asset.sourcePath.trim())
-    .map((asset) => ({
-      title: `Selected ${labelImageAssetTypeForPrompt(asset.type)}: ${asset.name}`,
-      imagePath: asset.sourcePath,
-      source: "Selected project visual reference",
-      role: buildSelectedAssetReferenceRole(asset),
-    }));
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">
+  <rect width="1080" height="1350" fill="${palette.bg}"/>
+  <rect x="54" y="54" width="972" height="1242" rx="42" fill="${palette.soft}" stroke="${palette.panel}" stroke-width="2"/>
+  <circle cx="925" cy="170" r="72" fill="${palette.panel}"/>
+  <circle cx="170" cy="1160" r="110" fill="${palette.panel}" opacity="0.72"/>
+  <rect x="92" y="92" width="896" height="1166" rx="28" fill="none" stroke="${palette.accent}" stroke-width="3" opacity="0.18"/>
+  <text x="116" y="170" fill="${palette.accent}" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" letter-spacing="4">${escapeSvg(slide.kicker)}</text>
+  <text x="116" y="250" fill="${palette.ink}" font-family="Inter, Arial, sans-serif" font-size="78" font-weight="800">
+    ${titleLines.map((line, lineIndex) => `<tspan x="116" dy="${lineIndex === 0 ? 0 : 88}">${escapeSvg(line)}</tspan>`).join("")}
+  </text>
+  <text x="116" y="${titleBlockY(titleLines.length)}" fill="${palette.ink}" font-family="Inter, Arial, sans-serif" font-size="36" font-weight="500">
+    ${bodyLines.map((line, lineIndex) => `<tspan x="116" dy="${lineIndex === 0 ? 0 : 48}">${escapeSvg(line)}</tspan>`).join("")}
+  </text>
+  <g transform="translate(116 990)">
+    <rect width="420" height="126" rx="28" fill="${palette.panel}" opacity="0.88"/>
+    <text x="34" y="48" fill="${palette.accent}" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="800" letter-spacing="3">CONTENT ROLE</text>
+    <text x="34" y="88" fill="${palette.ink}" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="650">
+      ${visualLines.map((line, lineIndex) => `<tspan x="34" dy="${lineIndex === 0 ? 0 : 34}">${escapeSvg(line)}</tspan>`).join("")}
+    </text>
+  </g>
+  <text x="116" y="1210" fill="${palette.accent}" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="800" letter-spacing="3">${escapeSvg(slide.footer)}</text>
+  <text x="902" y="1210" fill="${palette.ink}" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700">${index + 1}/${total}</text>
+</svg>`.trim();
 }
 
-function labelImageAssetTypeForPrompt(type: ImageAssetType) {
-  if (type === ImageAssetType.PRODUCT) return "product reference";
-  if (type === ImageAssetType.PRODUCT_ON_BODY) return "product-on-body reference";
-  if (type === ImageAssetType.STYLE_REFERENCE) return "style reference";
-  if (type === ImageAssetType.BANNER_REFERENCE) return "layout/banner reference";
-  if (type === ImageAssetType.BACKGROUND) return "background reference";
-  return "reference";
+function titleBlockY(lineCount: number) {
+  return 310 + Math.max(1, lineCount) * 88;
 }
 
-function buildSelectedAssetReferenceRole(asset: ImageAsset) {
-  const details = [asset.description, asset.productCategory, asset.colors, asset.tags, asset.notes]
-    .filter(Boolean)
-    .join("; ");
-
-  if (asset.type === ImageAssetType.PRODUCT || asset.type === ImageAssetType.PRODUCT_ON_BODY) {
-    return `${details || "Use as product truth."} Preserve product shape, color, fabric, construction, and fit truth.`;
-  }
-
-  if (asset.type === ImageAssetType.BANNER_REFERENCE) {
-    return `${details || "Use as layout direction."} Use spacing, hierarchy, and composition only; do not copy text.`;
-  }
-
-  if (asset.type === ImageAssetType.STYLE_REFERENCE || asset.type === ImageAssetType.BACKGROUND) {
-    return `${details || "Use as style direction."} Use mood, palette, lighting, texture, and atmosphere only.`;
-  }
-
-  return details || "Use only if directly relevant to this publication.";
+function cleanCarouselLine(value: string) {
+  return value.replace(/\s+/g, " ").trim().replace(/[“”]/g, '"').replace(/[’]/g, "'");
 }
 
-function isCompetitorSocialAsset(asset: ImageAsset) {
-  if (!asset.sourcePath.trim()) {
-    return false;
-  }
+function wrapSvgText(text: string, maxChars: number, maxLines: number) {
+  const words = cleanCarouselLine(text).split(" ").filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
 
-  const haystack = normalizeReferenceText(
-    `${asset.name} ${asset.sourcePath} ${asset.description} ${asset.productCategory} ${asset.tags} ${asset.notes}`,
-  );
-  const socialTerms = ["instagram", "pinterest", "pin.it", "tiktok", "reels", "social"];
-  const competitorTerms = ["competitor", "skims", "honeylove", "leonisa", "shapermint", "spanx", "thirdlove"];
-  const formatTerms = ["cover", "carousel", "banner", "layout", "campaign", "post", "pin", "reel"];
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
 
-  if (asset.type === ImageAssetType.PRODUCT || asset.type === ImageAssetType.PRODUCT_ON_BODY) {
-    return competitorTerms.some((term) => haystack.includes(term)) && socialTerms.some((term) => haystack.includes(term));
-  }
-
-  return [...socialTerms, ...competitorTerms, ...formatTerms].some((term) => haystack.includes(term));
-}
-
-function scoreCompetitorSocialAsset(asset: ImageAsset, context: string, formatKey: string) {
-  const haystack = normalizeReferenceText(
-    `${asset.name} ${asset.sourcePath} ${asset.description} ${asset.productCategory} ${asset.colors} ${asset.tags} ${asset.notes}`,
-  );
-  const contextTerms = context.split(" ").filter((term) => term.length > 3);
-  const uniqueContextTerms = Array.from(new Set(contextTerms));
-  let score = 0;
-
-  for (const term of uniqueContextTerms) {
-    if (haystack.includes(term)) {
-      score += 1;
+    if (next.length > maxChars && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
     }
+
+    if (lines.length === maxLines) break;
   }
 
-  if (haystack.includes("competitor")) score += 5;
-  if (haystack.includes("instagram") || haystack.includes("pinterest") || haystack.includes("tiktok")) score += 4;
-  if (formatKey === "carousel" && haystack.includes("carousel")) score += 4;
-  if (formatKey === "offer_banner" && (haystack.includes("banner") || haystack.includes("offer"))) score += 4;
-  if (formatKey === "reels_tiktok_cover" && (haystack.includes("reel") || haystack.includes("cover"))) score += 4;
-  if (formatKey === "graphic_collage" && (haystack.includes("collage") || haystack.includes("layout"))) score += 4;
-  if (formatKey === "product_on_body" && (haystack.includes("body") || haystack.includes("model"))) score += 3;
-  if (formatKey === "product_still" && (haystack.includes("product") || haystack.includes("still"))) score += 3;
-  if (asset.type === ImageAssetType.BANNER_REFERENCE || asset.type === ImageAssetType.STYLE_REFERENCE) score += 2;
+  if (current && lines.length < maxLines) lines.push(current);
 
-  return score;
-}
-
-function detectSocialReferenceSource(sourcePath: string) {
-  const value = sourcePath.toLowerCase();
-
-  if (value.includes("instagram.com")) return "Instagram competitor/social reference";
-  if (value.includes("pinterest.") || value.includes("pin.it")) return "Pinterest competitor/social reference";
-  if (value.includes("tiktok.com")) return "TikTok competitor/social reference";
-
-  return "Competitor/social reference catalog";
-}
-
-function buildCompetitorReferenceRole(asset: ImageAsset) {
-  const details = [asset.description, asset.tags, asset.notes].filter(Boolean).join(" ");
-
-  if (details.trim()) {
-    return `${details.trim()} Use the social-native composition, hook placement, cover idea, or carousel logic as inspiration.`;
+  if (words.join(" ").length > lines.join(" ").length && lines.length) {
+    lines[lines.length - 1] = `${lines[lines.length - 1].replace(/[.。,…,\s]+$/u, "")}...`;
   }
 
-  return "Use the social-native composition, hook placement, cover idea, or carousel logic as inspiration.";
+  return lines.length ? lines : [""];
+}
+
+function escapeSvg(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function svgDataUrl(svg: string) {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function normalizeReferenceText(value: string) {

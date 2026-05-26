@@ -292,7 +292,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
     url: string,
     message: string,
     workingMessage = "Working...",
-    options: { savePlanningInputsFirst?: boolean } = {},
+    options: { savePlanningInputsFirst?: boolean; body?: Record<string, unknown> } = {},
   ) {
     setBusyAction(url);
     setFlash(options.savePlanningInputsFirst ? "Saving planning inputs..." : workingMessage);
@@ -306,7 +306,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
 
       const next = await callJson<DashboardState>(url, {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify(options.body ?? {}),
       });
       syncDashboard(next, message);
     } catch (caught) {
@@ -920,10 +920,41 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                     <ActionButton
                       disabled={isBusy || !selectedPost.packet || !dashboard.settings.imageRenderingConfigured}
                       tone="secondary"
-                      onClick={() => runDashboardAction(`/api/posts/${selectedPost.id}/render-images`, "Image generated and attached.", "Generating image through ILARIA Shoot Studio...")}
+                      onClick={() => runDashboardAction(
+                        `/api/posts/${selectedPost.id}/render-images`,
+                        "Cover image generated and attached.",
+                        "Generating cover image through ILARIA Shoot Studio...",
+                        { body: { mode: "cover" } },
+                      )}
                     >
                       <ImageIcon size={15} />
-                      {busyAction?.includes(`/api/posts/${selectedPost.id}/render-images`) ? "Generating image..." : "Generate image"}
+                      {busyAction?.includes(`/api/posts/${selectedPost.id}/render-images`) ? "Generating..." : "Generate cover image"}
+                    </ActionButton>
+                    <ActionButton
+                      disabled={isBusy || !selectedPost.packet}
+                      tone="secondary"
+                      onClick={() => runDashboardAction(
+                        `/api/posts/${selectedPost.id}/render-images`,
+                        "Carousel slides generated and attached.",
+                        "Building carousel slides with typography...",
+                        { body: { mode: "carousel" } },
+                      )}
+                    >
+                      <ImageIcon size={15} />
+                      Generate carousel slides
+                    </ActionButton>
+                    <ActionButton
+                      disabled={isBusy || !selectedPost.packet || !dashboard.settings.imageRenderingConfigured}
+                      tone="secondary"
+                      onClick={() => runDashboardAction(
+                        `/api/posts/${selectedPost.id}/render-images`,
+                        "Video scene references generated and attached.",
+                        "Generating scene references through ILARIA Shoot Studio...",
+                        { body: { mode: "scene_refs" } },
+                      )}
+                    >
+                      <ImageIcon size={15} />
+                      Generate scene refs
                     </ActionButton>
                   </div>
                   {selectedProductionPrompt ? (
@@ -1366,11 +1397,14 @@ function CompetitorPostTable({ posts }: { posts: CompetitorPostDto[] }) {
 function canRenderVisualReferenceImage(path: string) {
   const value = path.toLowerCase().split("?")[0];
 
+  if (value.startsWith("data:image/")) {
+    return true;
+  }
+
   return (
     value.startsWith("http://") ||
     value.startsWith("https://") ||
-    value.startsWith("/") ||
-    value.startsWith("data:image/")
+    value.startsWith("/")
   ) && (
     value.includes("images.unsplash.com") ||
     /\.(avif|gif|jpeg|jpg|png|webp)$/i.test(value)
