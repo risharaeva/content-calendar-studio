@@ -10,7 +10,6 @@ import {
   Copy,
   ImageIcon,
   Layers3,
-  Palette,
   Sparkles,
   Target,
 } from "lucide-react";
@@ -91,15 +90,6 @@ const IMAGE_FORMAT_TEMPLATES = [
   },
 ];
 
-const IMAGE_ASSET_TYPES = [
-  { value: "PRODUCT", label: "Product" },
-  { value: "PRODUCT_ON_BODY", label: "Product on body" },
-  { value: "STYLE_REFERENCE", label: "Style reference" },
-  { value: "BANNER_REFERENCE", label: "Banner reference" },
-  { value: "BACKGROUND", label: "Background" },
-  { value: "OTHER", label: "Other" },
-];
-
 const INSPIRATION_SOURCE_TYPES = [
   { value: "COMPETITOR", label: "Competitor" },
   { value: "PINTEREST", label: "Pinterest" },
@@ -128,7 +118,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [productionPrompt, setProductionPrompt] = useState<{ postId: string; text: string; kind: "image" | "video" } | null>(null);
   const [activeTab, setActiveTab] = useState<"inputs" | "calendar" | "analytics">("inputs");
-  const [activeInputTab, setActiveInputTab] = useState<"plan" | "inspiration" | "visual" | "strategy" | "advanced">("plan");
+  const [activeInputTab, setActiveInputTab] = useState<"plan" | "inspiration" | "strategy" | "advanced">("plan");
   const [isPending, startTransition] = useTransition();
   const isBusy = isPending || busyAction !== null;
 
@@ -143,7 +133,6 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
       ? productionPrompt.kind
       : null;
   const publishedPosts = dashboard.publishedPosts ?? [];
-  const activeImageAssets = (dashboard.imageAssets ?? []).filter((asset) => asset.isActive);
   const planningPeriod = getPlanningPeriodSummary(dashboard.profile);
 
   const filteredCalendar = dashboard.calendar.filter((post) => {
@@ -334,8 +323,8 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
 
     const kind = isVideoPost(selectedPost) ? "video" : "image";
     const prompt = kind === "video"
-      ? buildProductionVideoBrief(selectedPost, dashboard.profile, dashboard.imageAssets ?? [])
-      : buildProductionImagePrompt(selectedPost, dashboard.imageAssets ?? []);
+      ? buildProductionVideoBrief(selectedPost, dashboard.profile, [])
+      : buildProductionImagePrompt(selectedPost, []);
     setProductionPrompt({ postId: selectedPost.id, text: prompt, kind });
     setError(null);
 
@@ -368,7 +357,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
       imageStyle: String(formData.get("imageStyle") ?? ""),
       imageObjects: String(formData.get("imageObjects") ?? ""),
       imageImpression: String(formData.get("imageImpression") ?? ""),
-      imageReferenceIds: formData.getAll("imageReferenceIds").map((value) => String(value)),
+      imageReferenceIds: [],
     };
 
     try {
@@ -380,30 +369,6 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
       syncDashboard(next, "Idea saved. Regenerate the packet when you are ready.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Idea save failed.");
-    }
-  }
-
-  async function handleImageAssetSubmit(formData: FormData, assetId?: string) {
-    const payload = {
-      type: String(formData.get("type") ?? "PRODUCT"),
-      name: String(formData.get("name") ?? ""),
-      sourcePath: String(formData.get("sourcePath") ?? ""),
-      description: String(formData.get("description") ?? ""),
-      productCategory: String(formData.get("productCategory") ?? ""),
-      colors: String(formData.get("colors") ?? ""),
-      tags: String(formData.get("tags") ?? ""),
-      notes: String(formData.get("notes") ?? ""),
-      isActive: formData.get("isActive") === "on",
-    };
-
-    try {
-      const next = await callJson<DashboardState>(assetId ? `/api/image-assets/${assetId}` : projectUrl("/api/image-assets"), {
-        method: assetId ? "PATCH" : "POST",
-        body: JSON.stringify(payload),
-      });
-      syncDashboard(next, assetId ? "Image asset updated." : "Image asset added.");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Image asset save failed.");
     }
   }
 
@@ -551,10 +516,9 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
             activeTab !== "inputs" && "hidden",
           )}>
             <SectionHeader eyebrow="Planning inputs" title="Monthly plan setup" />
-            <div className="grid gap-2 rounded-[14px] border border-[#ded8cc] bg-[#f3f0e9] p-2 md:grid-cols-4">
+            <div className="grid gap-2 rounded-[14px] border border-[#ded8cc] bg-[#f3f0e9] p-2 md:grid-cols-3">
               <InputSubTabButton active={activeInputTab === "plan"} onClick={() => setActiveInputTab("plan")} icon={<CalendarDays size={15} />} label="Plan setup" />
               <InputSubTabButton active={activeInputTab === "inspiration"} onClick={() => setActiveInputTab("inspiration")} icon={<Sparkles size={15} />} label="Inspiration" />
-              <InputSubTabButton active={activeInputTab === "visual"} onClick={() => setActiveInputTab("visual")} icon={<Palette size={15} />} label="Visual refs" />
               <InputSubTabButton active={activeInputTab === "strategy"} onClick={() => setActiveInputTab("strategy")} icon={<Layers3 size={15} />} label="Strategy" />
             </div>
             <form
@@ -598,7 +562,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
               </div>
 
               <HiddenProfileVisualFields profile={dashboard.profile} />
-              <div className={cn((activeInputTab === "inspiration" || activeInputTab === "visual" || activeInputTab === "advanced") && "hidden")}>
+              <div className={cn((activeInputTab === "inspiration" || activeInputTab === "advanced") && "hidden")}>
                 <ActionButton type="submit" disabled={isBusy}>
                   Save planning inputs
                 </ActionButton>
@@ -686,51 +650,6 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                 </ActionButton>
               </form>
               <CompetitorPostTable posts={dashboard.competitorPosts} />
-            </div>
-
-            <div className={cn("rounded-[16px] border border-[#c8dde4] bg-[#eef6f8] p-4", activeInputTab !== "visual" && "hidden")}>
-              <SectionHeader eyebrow="Reference catalog" title="Visual references" />
-              <form
-                action={(formData) => startTransition(() => void handleImageAssetSubmit(formData))}
-                className="mt-4 grid gap-3 rounded-[14px] border border-[#c8dde4] bg-white/60 p-3"
-              >
-                <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)]">
-                  <SelectField label="Type" name="type" defaultValue="STYLE_REFERENCE" options={IMAGE_ASSET_TYPES} />
-                  <Field label="Name" name="name" defaultValue="" />
-                  <Field label="Link, social URL, or local path" name="sourcePath" defaultValue="" />
-                </div>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Field label="Product category" name="productCategory" defaultValue="" />
-                  <Field label="Colors" name="colors" defaultValue="" />
-                  <Field label="Tags" name="tags" defaultValue="" />
-                </div>
-                <Field label="Description" name="description" defaultValue="" textarea />
-                <Field label="Notes" name="notes" defaultValue="" textarea />
-                <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input name="isActive" type="checkbox" defaultChecked className="h-4 w-4 accent-slate-900" />
-                  Active in prompt picker
-                </label>
-                <ActionButton type="submit" tone="secondary" disabled={isBusy}>
-                  Add asset
-                </ActionButton>
-              </form>
-
-              <div className="mt-4 grid gap-3">
-                {dashboard.imageAssets.length ? (
-                  dashboard.imageAssets.map((asset) => (
-                    <ImageAssetEditor
-                      key={asset.id}
-                      asset={asset}
-                      isBusy={isBusy}
-                      onSubmit={(formData) => startTransition(() => void handleImageAssetSubmit(formData, asset.id))}
-                    />
-                  ))
-                ) : (
-                  <p className="rounded-[14px] border border-dashed border-black/12 bg-white/55 p-4 text-[15px] font-medium leading-6 text-slate-700">
-                    Add product photos, product-on-body references, banner layouts, or style references as URLs or local paths.
-                  </p>
-                )}
-              </div>
             </div>
 
             <div className={cn("rounded-[16px] border border-[#ded8cc] bg-[#f3f0e9] p-4", activeInputTab !== "advanced" && "hidden")}>
@@ -930,7 +849,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                     <div className="grid gap-3 border border-black/8 bg-white/45 p-3">
                       <SectionHeader
                         eyebrow={isVideoPost(selectedPost) ? "Media brief" : "Image brief"}
-                        title={isVideoPost(selectedPost) ? "Cover image inputs and visual references" : "External generation brief"}
+                        title={isVideoPost(selectedPost) ? "Cover image inputs" : "External generation brief"}
                       />
                       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
                         <label className="grid gap-2 text-sm font-medium text-slate-800">
@@ -980,10 +899,6 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                         name="imageImpression"
                         defaultValue={selectedPost.imageImpression || "tasteful, modern, sensual but not explicit, social-ready, clear first-frame impact"}
                         textarea
-                      />
-                      <ImageReferencePicker
-                        assets={activeImageAssets}
-                        selectedIds={selectedPost.imageReferenceIds}
                       />
                     </div>
                     <ActionButton type="submit" tone="secondary" disabled={isBusy}>
@@ -1042,7 +957,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
                         <ImageIcon size={14} />
-                        Visual references
+                        Generated images
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         {selectedPost.images.length ? (
@@ -1050,7 +965,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                             <VisualReferenceCard key={image.id} image={image} theme={selectedPost.theme} />
                           ))
                         ) : (
-                          <p className="text-[15px] font-medium leading-6 text-slate-700">No relevant visual references are attached yet. Select product, style, banner, or competitor/social assets in the Image brief before regenerating the packet.</p>
+                          <p className="text-[15px] font-medium leading-6 text-slate-700">No generated images are attached yet. Generate the packet, then use Generate image.</p>
                         )}
                       </div>
                     </div>
@@ -1274,42 +1189,6 @@ function HiddenProfileVisualFields({ profile }: { profile: ProjectProfileDto }) 
   );
 }
 
-function ImageAssetEditor({
-  asset,
-  isBusy,
-  onSubmit,
-}: {
-  asset: ImageAssetDto;
-  isBusy: boolean;
-  onSubmit: (formData: FormData) => void;
-}) {
-  return (
-    <form action={onSubmit} className="grid gap-3 border border-black/8 bg-white/55 p-3">
-      <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)]">
-        <SelectField label="Type" name="type" defaultValue={asset.type} options={IMAGE_ASSET_TYPES} />
-        <Field label="Name" name="name" defaultValue={asset.name} />
-        <Field label="Link, social URL, or local path" name="sourcePath" defaultValue={asset.sourcePath} />
-      </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        <Field label="Product category" name="productCategory" defaultValue={asset.productCategory} />
-        <Field label="Colors" name="colors" defaultValue={asset.colors} />
-        <Field label="Tags" name="tags" defaultValue={asset.tags} />
-      </div>
-      <Field label="Description" name="description" defaultValue={asset.description} textarea />
-      <Field label="Notes" name="notes" defaultValue={asset.notes} textarea />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input name="isActive" type="checkbox" defaultChecked={asset.isActive} className="h-4 w-4 accent-slate-900" />
-          Active in prompt picker
-        </label>
-        <ActionButton type="submit" tone="secondary" disabled={isBusy}>
-          Update asset
-        </ActionButton>
-      </div>
-    </form>
-  );
-}
-
 function PlanEventList({
   events,
   isBusy,
@@ -1388,7 +1267,7 @@ function VisualReferenceCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={image.imagePath}
-            alt={`Visual reference ${image.variant} for ${theme}`}
+            alt={`Generated image ${image.variant} for ${theme}`}
             loading="lazy"
             referrerPolicy="no-referrer"
             className="h-full w-full object-cover"
@@ -1397,9 +1276,9 @@ function VisualReferenceCard({
           <div className="flex h-full flex-col justify-between bg-[#ede7dc] p-4 text-slate-800">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">
               <ArrowUpRight size={14} />
-              Social reference
+              Generated media
             </div>
-            <p className="text-lg font-semibold tracking-[-0.03em] text-slate-950">Open source post for visual direction</p>
+            <p className="text-lg font-semibold tracking-[-0.03em] text-slate-950">Open generated media</p>
             <p className="break-all text-sm font-medium leading-6 text-slate-700">{image.imagePath}</p>
           </div>
         )}
@@ -1412,7 +1291,7 @@ function VisualReferenceCard({
           rel="noreferrer"
           className="inline-flex items-center gap-1 text-slate-900 underline decoration-black/25 underline-offset-2"
         >
-          Open reference
+          Open image
           <ArrowUpRight size={12} />
         </a>
       </figcaption>
@@ -1496,66 +1375,6 @@ function canRenderVisualReferenceImage(path: string) {
     value.includes("images.unsplash.com") ||
     /\.(avif|gif|jpeg|jpg|png|webp)$/i.test(value)
   );
-}
-
-function ImageReferencePicker({
-  assets,
-  selectedIds,
-}: {
-  assets: ImageAssetDto[];
-  selectedIds: string[];
-}) {
-  if (!assets.length) {
-    return (
-      <p className="border border-dashed border-black/12 bg-white/45 p-4 text-[15px] font-medium leading-6 text-slate-700">
-        Add image assets in Inputs to attach product, banner, or style references to this brief.
-      </p>
-    );
-  }
-
-  return (
-    <div className="grid gap-2">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Selected references</p>
-      <div className="grid gap-2 md:grid-cols-2">
-        {assets.map((asset) => (
-          <label key={asset.id} className="grid gap-1 border border-black/8 bg-white/65 p-3 text-[15px] font-medium text-slate-800">
-            <span className="flex items-start gap-2">
-              <input
-                name="imageReferenceIds"
-                type="checkbox"
-                value={asset.id}
-                defaultChecked={selectedIds.includes(asset.id)}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-slate-900"
-              />
-              <span className="min-w-0">
-                <span className="block font-medium tracking-[-0.02em] text-slate-900">{asset.name}</span>
-                <span className="block text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">{labelImageAssetType(asset.type)}</span>
-              </span>
-            </span>
-            <span className="break-all text-sm leading-6 text-slate-700">{asset.sourcePath}</span>
-            <span className="text-sm leading-6 text-slate-700">{referenceUsageHint(asset.type)}</span>
-            {asset.tags ? <span className="text-sm leading-6 text-slate-700">{asset.tags}</span> : null}
-          </label>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function referenceUsageHint(type: ImageAssetDto["type"]) {
-  if (type === "PRODUCT" || type === "PRODUCT_ON_BODY") {
-    return "Used as product truth.";
-  }
-
-  if (type === "STYLE_REFERENCE" || type === "BACKGROUND") {
-    return "Used for mood, light, color, and texture only.";
-  }
-
-  if (type === "BANNER_REFERENCE") {
-    return "Used for layout and composition only.";
-  }
-
-  return "Used as supporting context.";
 }
 
 function PublishedPostHistoryTable({ posts }: { posts: PublishedPostDto[] }) {
@@ -1897,10 +1716,6 @@ function clampUiPostCount(value: number) {
 
 function labelInspirationSource(sourceType: CompetitorPostDto["sourceType"]) {
   return INSPIRATION_SOURCE_TYPES.find((option) => option.value === sourceType)?.label ?? sourceType;
-}
-
-function labelImageAssetType(type: ImageAssetDto["type"]) {
-  return IMAGE_ASSET_TYPES.find((option) => option.value === type)?.label ?? type;
 }
 
 function labelPlanEventType(type: PlanEventDto["type"]) {
