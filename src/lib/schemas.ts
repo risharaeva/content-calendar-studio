@@ -127,7 +127,7 @@ export const competitorPostSchema = z.object({
   sourceType: z.enum(["COMPETITOR", "PINTEREST", "INSTAGRAM", "TIKTOK", "INTERNAL"]).default("COMPETITOR"),
   competitorName: z.string().trim().max(120).transform((value) => value || "Untitled inspiration"),
   platform: z.enum(["INSTAGRAM", "TIKTOK", "BOTH"]),
-  postUrl: z.string().trim().min(2).max(1200),
+  postUrl: z.string().trim().max(1200).optional().default(""),
   publishedAt: z.coerce.date(),
   format: z.string().trim().max(80).optional().default(""),
   theme: z.string().trim().max(140).optional().default(""),

@@ -11,7 +11,6 @@ import {
   ImageIcon,
   Layers3,
   Palette,
-  Settings2,
   Sparkles,
   Target,
 } from "lucide-react";
@@ -552,12 +551,11 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
             activeTab !== "inputs" && "hidden",
           )}>
             <SectionHeader eyebrow="Planning inputs" title="Monthly plan setup" />
-            <div className="grid gap-2 rounded-[14px] border border-[#ded8cc] bg-[#f3f0e9] p-2 md:grid-cols-5">
+            <div className="grid gap-2 rounded-[14px] border border-[#ded8cc] bg-[#f3f0e9] p-2 md:grid-cols-4">
               <InputSubTabButton active={activeInputTab === "plan"} onClick={() => setActiveInputTab("plan")} icon={<CalendarDays size={15} />} label="Plan setup" />
               <InputSubTabButton active={activeInputTab === "inspiration"} onClick={() => setActiveInputTab("inspiration")} icon={<Sparkles size={15} />} label="Inspiration" />
               <InputSubTabButton active={activeInputTab === "visual"} onClick={() => setActiveInputTab("visual")} icon={<Palette size={15} />} label="Visual refs" />
               <InputSubTabButton active={activeInputTab === "strategy"} onClick={() => setActiveInputTab("strategy")} icon={<Layers3 size={15} />} label="Strategy" />
-              <InputSubTabButton active={activeInputTab === "advanced"} onClick={() => setActiveInputTab("advanced")} icon={<Settings2 size={15} />} label="Advanced" />
             </div>
             <form
               ref={planningFormRef}
@@ -599,18 +597,8 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                 </div>
               </div>
 
-              <div className={cn("rounded-[16px] border border-[#c8dde4] bg-[#eef6f8] p-3", activeInputTab !== "visual" && "hidden")}>
-                <SectionHeader eyebrow="Brand assets" title="Visual identity" />
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <Field label="Logo link or local path" name="logoReferenceUrl" defaultValue={dashboard.profile.logoReferenceUrl} />
-                  <Field label="Product folder or reference file" name="productReferenceUrl" defaultValue={dashboard.profile.productReferenceUrl} />
-                  <Field label="Fonts / typography" name="visualFonts" defaultValue={dashboard.profile.visualFonts} textarea />
-                  <Field label="Colors / palette" name="visualColors" defaultValue={dashboard.profile.visualColors} textarea />
-                  <Field label="Banner / layout reference folder or file" name="bannerReferenceUrl" defaultValue={dashboard.profile.bannerReferenceUrl} />
-                  <Field label="Visual style notes" name="layoutReferenceNotes" defaultValue={dashboard.profile.layoutReferenceNotes} textarea />
-                </div>
-              </div>
-              <div className={cn((activeInputTab === "inspiration" || activeInputTab === "advanced") && "hidden")}>
+              <HiddenProfileVisualFields profile={dashboard.profile} />
+              <div className={cn((activeInputTab === "inspiration" || activeInputTab === "visual" || activeInputTab === "advanced") && "hidden")}>
                 <ActionButton type="submit" disabled={isBusy}>
                   Save planning inputs
                 </ActionButton>
@@ -670,7 +658,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                   <SelectField label="Source type" name="sourceType" defaultValue="COMPETITOR" options={INSPIRATION_SOURCE_TYPES} />
                   <Field label="Source name" name="competitorName" defaultValue="" />
                   <SelectField label="Platform" name="platform" defaultValue="INSTAGRAM" options={PLATFORM_OPTIONS} />
-                  <Field label="Post URL" name="postUrl" defaultValue="" />
+                  <Field label="Post URL (optional)" name="postUrl" defaultValue="" />
                   <Field label="Published" name="publishedAt" defaultValue={format(new Date(), "yyyy-MM-dd")} type="date" />
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
@@ -702,9 +690,6 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
 
             <div className={cn("rounded-[16px] border border-[#c8dde4] bg-[#eef6f8] p-4", activeInputTab !== "visual" && "hidden")}>
               <SectionHeader eyebrow="Reference catalog" title="Visual references" />
-              <p className="mt-2 text-[15px] font-medium leading-6 text-slate-700">
-                Use this only when you have concrete product photos, product-on-body examples, banner layouts, or social reference links that should be selectable inside image briefs.
-              </p>
               <form
                 action={(formData) => startTransition(() => void handleImageAssetSubmit(formData))}
                 className="mt-4 grid gap-3 rounded-[14px] border border-[#c8dde4] bg-white/60 p-3"
@@ -1267,6 +1252,19 @@ function AssetLinks({ value }: { value: string }) {
   );
 }
 
+function HiddenProfileVisualFields({ profile }: { profile: ProjectProfileDto }) {
+  return (
+    <div className="hidden" aria-hidden="true">
+      <input type="hidden" name="logoReferenceUrl" value={profile.logoReferenceUrl} />
+      <input type="hidden" name="productReferenceUrl" value={profile.productReferenceUrl} />
+      <input type="hidden" name="visualFonts" value={profile.visualFonts} />
+      <input type="hidden" name="visualColors" value={profile.visualColors} />
+      <input type="hidden" name="bannerReferenceUrl" value={profile.bannerReferenceUrl} />
+      <input type="hidden" name="layoutReferenceNotes" value={profile.layoutReferenceNotes} />
+    </div>
+  );
+}
+
 function ImageAssetEditor({
   asset,
   isBusy,
@@ -1455,15 +1453,19 @@ function CompetitorPostTable({ posts }: { posts: CompetitorPostDto[] }) {
                 {post.views} views · {post.likes} likes · {post.comments} comments · {post.saves} saves
               </td>
               <td className="px-3 py-3">
-                <a
-                  href={post.postUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-slate-900 underline decoration-black/25 underline-offset-2"
-                >
-                  Open
-                  <ArrowUpRight size={12} />
-                </a>
+                {post.postUrl ? (
+                  <a
+                    href={post.postUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-900 underline decoration-black/25 underline-offset-2"
+                  >
+                    Open
+                    <ArrowUpRight size={12} />
+                  </a>
+                ) : (
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">No URL</span>
+                )}
               </td>
             </tr>
           ))}

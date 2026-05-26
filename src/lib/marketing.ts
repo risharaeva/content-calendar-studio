@@ -113,6 +113,7 @@ interface RecommendationSeed {
 }
 
 interface CompetitorPlanPattern {
+  sourceId: string;
   sourceType: string;
   competitorName: string;
   platform: Platform;
@@ -1632,6 +1633,7 @@ function buildCompetitorPlanPatterns(posts: CompetitorPost[]) {
 
       return {
         sourceType: post.sourceType || "COMPETITOR",
+        sourceId: post.id,
         competitorName: post.competitorName,
         platform: post.platform,
         relativeScore: Number(relativeScore.toFixed(2)),
@@ -1824,7 +1826,7 @@ function buildPlanFallback(
     adaptCompetitorHook(pattern),
     `Inspiration-based adaptation from ${pattern.competitorName}: ${pattern.visualPattern || "Use the same winning social mechanic, but rebuild with ILARIA product truth, warm adult tone, and comfort-first framing."}`,
     `Borrow the winning mechanic from ${pattern.competitorName}: ${pattern.hook || "problem-solution opener"}. CTA/offer cue: ${pattern.cta || pattern.offer || "soft save/comment/shop cue"}.`,
-    `Adapt as ILARIA, not a copy: keep the format logic, swap in our proof, comfort language, and calmer visual system. Source: ${pattern.sourceUrl}`,
+    `Adapt as ILARIA, not a copy: keep the format logic, swap in our proof, comfort language, and calmer visual system.${pattern.sourceUrl ? ` Source: ${pattern.sourceUrl}` : " Internal idea, no source URL."}`,
   ]);
   const targetCompetitorCount = Math.min(Math.ceil(targetCount * 0.55), competitorItems.length);
   const priorityItems = recommendationItems.length
@@ -2578,7 +2580,7 @@ function mapPublishedPost(post: PublishedPost): PublishedPostDto {
 
 function mapCompetitorPosts(posts: CompetitorPost[]): CompetitorPostDto[] {
   const patterns = buildCompetitorPlanPatterns(posts);
-  const scoreByUrl = new Map(patterns.map((pattern) => [pattern.sourceUrl, pattern.relativeScore]));
+  const scoreById = new Map(patterns.map((pattern) => [pattern.sourceId, pattern.relativeScore]));
 
   return posts.map((post) => ({
     id: post.id,
@@ -2589,7 +2591,7 @@ function mapCompetitorPosts(posts: CompetitorPost[]): CompetitorPostDto[] {
     postUrl: post.postUrl,
     publishedAt: formatISO(post.publishedAt),
     capturedAt: formatISO(post.capturedAt),
-    relativeScore: scoreByUrl.get(post.postUrl) ?? 1,
+    relativeScore: scoreById.get(post.id) ?? 1,
     format: post.format,
     theme: post.theme,
     hook: post.hook,
