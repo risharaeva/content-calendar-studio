@@ -24,10 +24,91 @@ interface StableDiffusionResponse {
 
 const LOCAL_IMAGE_WIDTH = 768;
 const LOCAL_IMAGE_HEIGHT = 1024;
+const DEFAULT_SHOOT_STUDIO_URL = "https://ilaria-fitting-room.vercel.app";
+
+type ShootStudioProduct = {
+  id: string;
+  name: string;
+  category: "Bra" | "Bodysuit" | "Briefs" | "Shapewear" | "Shorts";
+  colors: string[];
+  support: "Light" | "Medium" | "Firm";
+  sizes: string;
+  needs: string[];
+  fitPromise: string;
+  construction: string[];
+  prompt: string;
+};
+
+const SHOOT_STUDIO_PRODUCTS: ShootStudioProduct[] = [
+  {
+    id: "smoothlayer-bodysuit",
+    name: "SmoothLayer Bodysuit",
+    category: "Bodysuit",
+    colors: ["Cocoa", "Cream", "Obsidian"],
+    support: "Medium",
+    sizes: "S-2XL",
+    needs: ["Light shaping", "Under dresses", "Workwear", "No-show"],
+    fitPromise: "Light-to-medium smoothing for a cleaner line under clothing.",
+    construction: ["round neck", "tank straps", "thong back", "seamless stretch"],
+    prompt: "round-neck seamless tank bodysuit, thong back, light-to-medium smoothing through waist and hips, flexible stretch",
+  },
+  {
+    id: "everyday-v-bra",
+    name: "Everyday V Bra",
+    category: "Bra",
+    colors: ["Latte", "Obsidian"],
+    support: "Light",
+    sizes: "30-36",
+    needs: ["Everyday wear", "No-show", "Under dresses"],
+    fitPromise: "Light seamless support for simple daily outfits.",
+    construction: ["seamless V shape", "light support", "soft band", "minimal lines"],
+    prompt: "light seamless V bra, soft band, minimal visible lines, everyday light support",
+  },
+  {
+    id: "curvehold-suit",
+    name: "CurveHold Shaping Suit",
+    category: "Shapewear",
+    colors: ["Obsidian", "Sandstone"],
+    support: "Firm",
+    sizes: "XS-L",
+    needs: ["Firm shaping", "Under dresses", "No-show"],
+    fitPromise: "Firm shaping through the waist and lower tummy under fitted outfits.",
+    construction: ["seamless compression", "waist control", "lower tummy support", "smooth finish"],
+    prompt: "firm seamless shaping suit with waist control and lower tummy support, smooth finish under clothing",
+  },
+  {
+    id: "everydayease-shorts",
+    name: "EverydayEase Shorts",
+    category: "Shorts",
+    colors: ["Obsidian", "Sandstone"],
+    support: "Light",
+    sizes: "M-XL",
+    needs: ["Breathable", "Low rise", "Everyday wear", "Boxer short"],
+    fitPromise: "Breathable low-rise boxer shorts for light everyday smoothing and layering.",
+    construction: ["low rise below navel", "boxer-short cut", "short upper-thigh inseam", "soft seamless edges", "breathable stretch"],
+    prompt: "breathable low-rise seamless boxer shorts, low rise below the navel, short upper-thigh leg length, light smoothing, soft stretch fabric",
+  },
+  {
+    id: "everyday-briefs",
+    name: "Everyday Briefs",
+    category: "Briefs",
+    colors: ["Latte", "Obsidian"],
+    support: "Light",
+    sizes: "XS-L",
+    needs: ["Everyday wear", "Postpartum support", "No-show"],
+    fitPromise: "Soft seamless briefs for long-wear everyday comfort.",
+    construction: ["soft waistband", "seamless edges", "light coverage", "no compression"],
+    prompt: "soft seamless everyday briefs, light coverage, soft waistband, no compression, smooth under clothing",
+  },
+];
 
 export function isImageRenderingConfigured(settings: Pick<AppSettings, "imageProvider" | "localImageEndpoint">) {
   if (settings.imageProvider === "OPENAI") {
     return Boolean(process.env.OPENAI_API_KEY);
+  }
+
+  if (settings.imageProvider === "SHOOT_STUDIO") {
+    return Boolean(process.env.SHOOT_STUDIO_API_URL ?? settings.localImageEndpoint ?? DEFAULT_SHOOT_STUDIO_URL);
   }
 
   return Boolean(settings.localImageEndpoint);
@@ -41,15 +122,163 @@ export async function renderPromptToImage({
   referenceImages = [],
   imageFormatKey = "",
 }: RenderImageInput) {
-  const base64 =
-    settings.imageProvider === "OPENAI"
-      ? await renderWithOpenAI(prompt)
-      : await renderWithStableDiffusionWebUi(prompt, settings, referenceImages, imageFormatKey);
+  if (settings.imageProvider === "SHOOT_STUDIO") {
+    return renderWithShootStudio(prompt, settings, imageFormatKey);
+  }
+
+  const base64 = settings.imageProvider === "OPENAI"
+    ? await renderWithOpenAI(prompt)
+    : await renderWithStableDiffusionWebUi(prompt, settings, referenceImages, imageFormatKey);
 
   return saveBase64Image({
     base64,
     fileName: `${postId}-variant-${variant}.png`,
   });
+}
+
+async function renderWithShootStudio(prompt: string, settings: AppSettings, imageFormatKey: string) {
+  const baseUrl = normalizeShootStudioUrl(process.env.SHOOT_STUDIO_API_URL ?? settings.localImageEndpoint);
+  const product = inferShootStudioProduct(prompt);
+  const color = inferShootStudioColor(prompt, product);
+  const model = inferShootStudioModel(prompt);
+  const finalPrompt = buildShootStudioPrompt(prompt, product, color, imageFormatKey);
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (process.env.SHOOT_STUDIO_API_KEY) {
+    headers.Authorization = `Bearer ${process.env.SHOOT_STUDIO_API_KEY}`;
+  }
+
+  const response = await fetch(`${baseUrl}/api/shoots/generate`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      prompt: finalPrompt,
+      finalPrompt,
+      product,
+      model,
+      color,
+      aspectRatio: aspectRatioForFormat(imageFormatKey),
+      generationSettings: {
+        provider: process.env.SHOOT_STUDIO_PROVIDER ?? "fal",
+        falModel: settings.imageModel || process.env.SHOOT_STUDIO_FAL_MODEL || "fal-ai/nano-banana-2/edit",
+        falResolution: process.env.SHOOT_STUDIO_FAL_RESOLUTION ?? "2K",
+        openAiModel: process.env.SHOOT_STUDIO_OPENAI_MODEL ?? "gpt-image-1.5",
+        openAiQuality: process.env.SHOOT_STUDIO_OPENAI_QUALITY ?? "medium",
+        openAiSize: sizeForFormat(imageFormatKey),
+        outputFormat: "jpeg",
+      },
+    }),
+  });
+
+  const payload = (await response.json().catch(() => null)) as { shoot?: { imageUrls?: string[] }; error?: string } | null;
+
+  if (!response.ok) {
+    throw new Error(payload?.error || `ILARIA Shoot Studio did not generate an image. HTTP ${response.status}`);
+  }
+
+  const imageUrl = payload?.shoot?.imageUrls?.[0];
+
+  if (!imageUrl) {
+    throw new Error("ILARIA Shoot Studio returned no image URL.");
+  }
+
+  return /^https?:\/\//i.test(imageUrl) ? imageUrl : `${baseUrl}${imageUrl}`;
+}
+
+function normalizeShootStudioUrl(rawUrl: string) {
+  const url = (rawUrl || DEFAULT_SHOOT_STUDIO_URL).trim() || DEFAULT_SHOOT_STUDIO_URL;
+  const withoutGeneratePath = url.replace(/\/api\/shoots\/generate\/?$/i, "");
+  return withoutGeneratePath.replace(/\/$/, "");
+}
+
+function inferShootStudioProduct(prompt: string) {
+  const normalized = prompt.toLowerCase();
+  const direct = SHOOT_STUDIO_PRODUCTS.find((product) => (
+    normalized.includes(product.id.toLowerCase()) ||
+    normalized.includes(product.name.toLowerCase()) ||
+    product.name.toLowerCase().split(/\s+/).every((part) => normalized.includes(part))
+  ));
+
+  if (direct) return direct;
+
+  if (/\b(bra|bust|cup|under-bust|v bra|support)\b/i.test(prompt)) {
+    return SHOOT_STUDIO_PRODUCTS.find((product) => product.id === "everyday-v-bra") ?? SHOOT_STUDIO_PRODUCTS[0];
+  }
+
+  if (/\b(shorts|boxer|thigh)\b/i.test(prompt)) {
+    return SHOOT_STUDIO_PRODUCTS.find((product) => product.id === "everydayease-shorts") ?? SHOOT_STUDIO_PRODUCTS[0];
+  }
+
+  if (/\b(brief|briefs|panty|underwear)\b/i.test(prompt)) {
+    return SHOOT_STUDIO_PRODUCTS.find((product) => product.id === "everyday-briefs") ?? SHOOT_STUDIO_PRODUCTS[0];
+  }
+
+  if (/\b(firm|compression|shaping suit|curvehold|tummy)\b/i.test(prompt)) {
+    return SHOOT_STUDIO_PRODUCTS.find((product) => product.id === "curvehold-suit") ?? SHOOT_STUDIO_PRODUCTS[0];
+  }
+
+  return SHOOT_STUDIO_PRODUCTS[0];
+}
+
+function inferShootStudioColor(prompt: string, product: ShootStudioProduct) {
+  const color = product.colors.find((item) => new RegExp(`\\b${escapeRegExp(item)}\\b`, "i").test(prompt));
+  return color ?? product.colors[0] ?? "";
+}
+
+function inferShootStudioModel(prompt: string) {
+  if (/\b(plus|3xl|full curvy|larger body)\b/i.test(prompt)) {
+    return { id: "imani-3xl", name: "Imani", size: "3XL" };
+  }
+
+  if (/\b(xl|2xl|plus-size)\b/i.test(prompt)) {
+    return { id: "celeste-2xl", name: "Celeste", size: "2XL" };
+  }
+
+  if (/\b(l size|size l|curvy|full bust)\b/i.test(prompt)) {
+    return { id: "nora-l", name: "Nora", size: "L" };
+  }
+
+  return { id: "elena-m", name: "Elena", size: "M" };
+}
+
+function buildShootStudioPrompt(prompt: string, product: ShootStudioProduct, color: string, imageFormatKey: string) {
+  return [
+    "Create one finished photorealistic social-commerce image for ILARIA Intimates.",
+    "Adult woman 30+, tasteful premium ecommerce/editorial mood, catalog-safe lingerie and shapewear context.",
+    `Product: ${product.name} in ${color}. Preserve exact garment truth from stored product references: ${product.prompt}.`,
+    `Product purpose: ${product.fitPromise}`,
+    `Format direction: ${labelFormatForShootStudio(imageFormatKey)}.`,
+    `Creative direction from Content Calendar: ${prompt}`,
+    "Keep the product clearly readable, naturally worn, realistic fabric texture, natural skin texture, warm refined lighting.",
+    "No text, no watermark, no logo overlay, no collage, no explicit pose, no plastic skin, no invented garment shape, color, straps, seams, lace, or hardware.",
+  ].join("\n");
+}
+
+function labelFormatForShootStudio(imageFormatKey: string) {
+  if (imageFormatKey === "reels_tiktok_cover") return "vertical 9:16 Reels/TikTok cover with clear first-frame composition and negative space for later typography";
+  if (imageFormatKey === "offer_banner") return "4:5 or 1:1 offer banner base image with readable negative space, no text baked into the image";
+  if (imageFormatKey === "product_still") return "product-only still life; do not add a person unless explicitly requested";
+  if (imageFormatKey === "product_on_body") return "product-on-body visual; the selected product must be worn by the model";
+  if (imageFormatKey === "graphic_collage") return "editorial graphic/collage base image, still coherent and photorealistic";
+  return "Instagram 4:5 social image";
+}
+
+function aspectRatioForFormat(imageFormatKey: string) {
+  if (imageFormatKey === "reels_tiktok_cover") return "9:16";
+  if (imageFormatKey === "product_still") return "1:1";
+  return "3:4";
+}
+
+function sizeForFormat(imageFormatKey: string) {
+  if (imageFormatKey === "reels_tiktok_cover") return "1024x1536";
+  if (imageFormatKey === "product_still") return "1024x1024";
+  return "1024x1536";
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function renderWithOpenAI(prompt: string) {

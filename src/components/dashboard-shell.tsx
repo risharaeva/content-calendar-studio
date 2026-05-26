@@ -802,12 +802,13 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                       name="imageProvider"
                       defaultValue={dashboard.settings.imageProvider}
                       options={[
+                        { value: "SHOOT_STUDIO", label: "ILARIA Shoot Studio" },
                         { value: "LOCAL_SD_WEBUI", label: "Local generator (draft)" },
                         { value: "OPENAI", label: "OpenAI images" },
                       ]}
                     />
                     <Field label="Image model" name="imageModel" defaultValue={dashboard.settings.imageModel} />
-                    <Field label="Local image endpoint" name="localImageEndpoint" defaultValue={dashboard.settings.localImageEndpoint} />
+                    <Field label="Image API endpoint" name="localImageEndpoint" defaultValue={dashboard.settings.localImageEndpoint} />
                     <div className="rounded-[12px] border border-black/8 bg-white/70 p-3 text-sm font-medium leading-6 text-slate-700">
                       Ollama and local image endpoints only run on this computer. On Vercel, choose OpenAI/Anthropic for hosted AI text, or the app will use metric-based fallback logic for recommendations. Local rendering is treated as a draft preview unless it points to a production ComfyUI, FLUX, or SDXL workflow.
                     </div>
@@ -1000,6 +1001,14 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                     <ActionButton disabled={isBusy} tone="secondary" onClick={() => void handleGenerateMediaBrief()}>
                       <Copy size={15} />
                       {isVideoPost(selectedPost) ? "Generate video brief" : "Generate image brief"}
+                    </ActionButton>
+                    <ActionButton
+                      disabled={isBusy || !selectedPost.packet || !dashboard.settings.imageRenderingConfigured}
+                      tone="secondary"
+                      onClick={() => runDashboardAction(`/api/posts/${selectedPost.id}/render-images`, "Image generated and attached.", "Generating image through ILARIA Shoot Studio...")}
+                    >
+                      <ImageIcon size={15} />
+                      {busyAction?.includes(`/api/posts/${selectedPost.id}/render-images`) ? "Generating image..." : "Generate image"}
                     </ActionButton>
                   </div>
                   {selectedProductionPrompt ? (

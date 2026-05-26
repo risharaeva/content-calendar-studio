@@ -274,7 +274,11 @@ export async function ensureProjectData(projectId = DEFAULT_PROJECT_ID) {
 
   await prisma.appSettings.upsert({
     where: { id: SETTINGS_ID },
-    update: {},
+    update: {
+      imageProvider: "SHOOT_STUDIO",
+      imageModel: "fal-ai/nano-banana-2/edit",
+      localImageEndpoint: "https://ilaria-fitting-room.vercel.app",
+    },
     create: {
       id: SETTINGS_ID,
       ollamaModel: DEFAULT_OLLAMA_MODEL,
@@ -286,9 +290,9 @@ export async function ensureProjectData(projectId = DEFAULT_PROJECT_ID) {
       insightsModel: DEFAULT_OLLAMA_MODEL,
       defaultLanguage: "English",
       brandVoice: "Clear, useful, observant, and concise.",
-      imageProvider: "LOCAL_SD_WEBUI",
-      imageModel: "segmind/tiny-sd",
-      localImageEndpoint: "http://127.0.0.1:7861/sdapi/v1/img2img",
+      imageProvider: "SHOOT_STUDIO",
+      imageModel: "fal-ai/nano-banana-2/edit",
+      localImageEndpoint: "https://ilaria-fitting-room.vercel.app",
     },
   });
 
@@ -2676,7 +2680,10 @@ function settingsToDto(settings: AppSettings): AppSettingsDto {
     insightsModel: settings.insightsModel,
     defaultLanguage: settings.defaultLanguage,
     brandVoice: settings.brandVoice,
-    imageProvider: settings.imageProvider === "OPENAI" ? "OPENAI" : "LOCAL_SD_WEBUI",
+    imageProvider:
+      settings.imageProvider === "OPENAI" || settings.imageProvider === "SHOOT_STUDIO"
+        ? settings.imageProvider
+        : "LOCAL_SD_WEBUI",
     imageModel: settings.imageModel,
     localImageEndpoint: settings.localImageEndpoint,
     hasOpenAiApiKey: Boolean(process.env.OPENAI_API_KEY),

@@ -44,7 +44,7 @@ export const settingsSchema = z.object({
   insightsModel: z.string().trim().min(1),
   defaultLanguage: z.string().trim().min(2),
   brandVoice: z.string().trim().min(3),
-  imageProvider: z.enum(["LOCAL_SD_WEBUI", "OPENAI"]),
+  imageProvider: z.enum(["LOCAL_SD_WEBUI", "OPENAI", "SHOOT_STUDIO"]),
   imageModel: z.string().trim().min(1),
   localImageEndpoint: z.string().trim().url(),
 });
