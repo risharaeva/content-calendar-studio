@@ -40,6 +40,8 @@ import { safeArray, safeObject, splitLines, toLineBlock } from "@/lib/utils";
 
 const DEFAULT_PROJECT_ID = 1;
 const SETTINGS_ID = 1;
+const FOREIGN_BRAND_PATTERN =
+  /\b(GORMASH|GOURMAGE|SKIMS|HONEYLOVE|LEONISA|SHAPERMINT|SPANX|THIRDLOVE|YUMMIE|SHAPELLX|UNDEROUTFIT|AGENT\s+PROVOCATEUR)\b/gi;
 
 type PostWithRelations = ContentPost & {
   packet: CampaignPacket | null;
@@ -1443,10 +1445,11 @@ async function buildMonthlyPlan(
         `Language: ${normalizedProfile.language}`,
         `Existing reviewed themes to learn from: ${existingThemes.join(", ") || "none"}`,
         `Published-post analytics recommendations to prioritize: ${recommendationContext.length ? JSON.stringify(recommendationContext) : "none recomputed yet"}`,
-        `Inspiration patterns from last 30 days: ${competitorPatterns.length ? JSON.stringify(competitorPatterns.slice(0, Math.min(15, targetCount))) : "none captured yet"}`,
+        `Inspiration patterns from last 30 days: ${competitorPatterns.length ? JSON.stringify(competitorPatterns.slice(0, Math.min(15, targetCount)).map(publicCompetitorPattern)) : "none captured yet"}`,
         `Balance requirement: create ${competitorShare}. Prioritize our own published-post winners first, then competitor inspiration, then strategy gap-fill. The final plan should feel about 50/50 or 60/40, never a full competitor copy.`,
         "For analytics-backed follow-ups: repeat the winning format/visual type/behavior from recommendations, but change the theme angle so the content does not feel duplicated.",
         "For inspiration-based posts: adapt the mechanic, hook structure, CTA, offer, or visual system into ILARIA's voice. Do not copy wording, claims, product truth, or brand identity.",
+        "Never include competitor names, source brand names, source collection names, source URLs, or source product names in final post fields. Replace source product truth with ILARIA product truth.",
         "For ILARIA-original posts: fill funnel and pillar gaps: attraction, education, trust, desire, conversion; include fit reassurance, long-wear comfort, size/returns trust, support construction, product-on-body, styling, reviews, and TikTok Shop reassurance.",
         "Competitor pattern families allowed: Honeylove-like support without squeeze, Leonisa-like real proof, Shapermint-like fit guidance, Yummie-like everyday comfort, Shapellx-like social-commerce demo, Underoutfit-like fit reassurance. SKIMS is style reference only, not a performance benchmark.",
         `Plan one content idea per day. Respect the monthly platform focus ${normalizedProfile.monthlyPlatformFocus}; if it is BOTH, publish on TikTok and Instagram at the same time.`,
@@ -1682,15 +1685,15 @@ function buildCaptionStyleGuide(patterns: CompetitorPlanPattern[]) {
   }
 
   return JSON.stringify(patterns.map((pattern) => ({
-    source: pattern.competitorName || pattern.sourceType,
+    source: pattern.sourceType,
     relativeScore: pattern.relativeScore,
     format: pattern.format,
     theme: pattern.theme,
-    hookMechanic: pattern.hook,
-    captionOrNotesMechanic: pattern.notes,
-    cta: pattern.cta,
-    offer: pattern.offer,
-    visualPattern: pattern.visualPattern,
+    hookMechanic: sanitizeInspirationText(pattern.hook),
+    captionOrNotesMechanic: sanitizeInspirationText(pattern.notes),
+    cta: sanitizeInspirationText(pattern.cta),
+    offer: sanitizeInspirationText(pattern.offer),
+    visualPattern: sanitizeInspirationText(pattern.visualPattern),
   })));
 }
 
@@ -1701,9 +1704,9 @@ function buildCaptionFallbacks(
 ) {
   const lead = normalizeCaptionSentence(post.angle);
   const proofLine = buildCaptionProofLine(post);
-  const ctaCue = captionPatterns.find((pattern) => pattern.cta.trim())?.cta.trim();
-  const offerCue = captionPatterns.find((pattern) => pattern.offer.trim())?.offer.trim();
-  const inspirationHook = captionPatterns.find((pattern) => pattern.hook.trim())?.hook.trim();
+  const ctaCue = sanitizeInspirationText(captionPatterns.find((pattern) => pattern.cta.trim())?.cta.trim() ?? "");
+  const offerCue = sanitizeInspirationText(captionPatterns.find((pattern) => pattern.offer.trim())?.offer.trim() ?? "");
+  const inspirationHook = sanitizeInspirationText(captionPatterns.find((pattern) => pattern.hook.trim())?.hook.trim() ?? "");
   const firstCta = ctaCue || "Save this before your next outfit decision.";
   const secondCta = post.format.toLowerCase().includes("carousel")
     ? "Swipe through it now, save it for the fitting-room moment later."
@@ -1752,13 +1755,67 @@ function buildCaptionProofLine(post: ContentPost) {
 }
 
 function normalizeCaptionSentence(value: string) {
-  const trimmed = value.replace(/\s+/g, " ").trim();
+  const trimmed = sanitizeInspirationText(value).replace(/\s+/g, " ").trim();
 
   if (!trimmed) {
     return "";
   }
 
   return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function publicCompetitorPattern(pattern: CompetitorPlanPattern) {
+  return {
+    sourceType: pattern.sourceType,
+    sourceId: pattern.sourceId,
+    platform: pattern.platform,
+    relativeScore: pattern.relativeScore,
+    format: pattern.format,
+    theme: sanitizeInspirationText(pattern.theme),
+    hookMechanic: sanitizeInspirationText(pattern.hook),
+    visualMechanic: sanitizeInspirationText(pattern.visualPattern),
+    offerCue: sanitizeInspirationText(pattern.offer),
+    ctaCue: sanitizeInspirationText(pattern.cta),
+    whyItWorked: sanitizeInspirationText(pattern.notes),
+  };
+}
+
+function buildCompetitorVisualMechanic(pattern: CompetitorPlanPattern) {
+  const text = sanitizeInspirationText(`${pattern.visualPattern} ${pattern.notes}`);
+
+  if (/\b(close-up|zoom|fabric|detail|stretch|try|style|under clothing|finished look)\b/i.test(text)) {
+    return "show the selected ILARIA product through close-up fabric/details, a gentle stretch or movement proof, try-on context, and one styled-under-clothing payoff. Rebuild with ILARIA product truth only.";
+  }
+
+  return text || "use the same winning social mechanic, but rebuild with ILARIA product truth, warm adult tone, and comfort-first framing.";
+}
+
+function buildCompetitorExecutionMechanic(pattern: CompetitorPlanPattern) {
+  const text = sanitizeInspirationText(pattern.hook || pattern.notes || pattern.visualPattern);
+
+  if (/\b(comfort|comfortable|fabric|detail|stretch|try|style)\b/i.test(text)) {
+    return "open with a product-comfort claim, prove it visually through detail/movement, then resolve into a real outfit use case.";
+  }
+
+  return text || "problem-solution opener";
+}
+
+function sanitizeInspirationText(value: string) {
+  return value
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(FOREIGN_BRAND_PATTERN, "source brand")
+    .replace(/\bby\s+the\s+source\s+brand\s+brand\b/gi, "from the source post")
+    .replace(/\bby\s+source\s+brand\b/gi, "from the source post")
+    .replace(/\bfrom\s+the\s+source\s+brand\b/gi, "from the source post")
+    .replace(/\bsource\s+brand\s+brand\b/gi, "source brand")
+    .replace(/\bthe\s+source\s+brand\b/gi, "the source post")
+    .replace(/\bLace\s+collection\b/gi, "source collection")
+    .replace(/\b(lace\s+underwear\s+set|lace\s+underwear|lace\s+bra|lace\s+panties)\b/gi, "selected ILARIA product")
+    .replace(/\bfrom\s+the\s+source\s+collection\b/gi, "from the source post")
+    .replace(/[💙🩵]+/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/\s+([.,!?;:])/g, "$1")
+    .trim();
 }
 
 function scoreCompetitorPost(post: Pick<CompetitorPost, "views" | "likes" | "comments" | "shares" | "saves">) {
@@ -1825,9 +1882,9 @@ function buildPlanFallback(
     normalizeCompetitorFormat(pattern.format, index),
     pattern.theme || "Competitor-proven pattern",
     adaptCompetitorHook(pattern),
-    `Inspiration-based adaptation from ${pattern.competitorName}: ${pattern.visualPattern || "Use the same winning social mechanic, but rebuild with ILARIA product truth, warm adult tone, and comfort-first framing."}`,
-    `Borrow the winning mechanic from ${pattern.competitorName}: ${pattern.hook || "problem-solution opener"}. CTA/offer cue: ${pattern.cta || pattern.offer || "soft save/comment/shop cue"}.`,
-    `Adapt as ILARIA, not a copy: keep the format logic, swap in our proof, comfort language, and calmer visual system.${pattern.sourceUrl ? ` Source: ${pattern.sourceUrl}` : " Internal idea, no source URL."}`,
+    `Inspiration-based adaptation: ${buildCompetitorVisualMechanic(pattern)}`,
+    `Borrow the winning mechanic: ${buildCompetitorExecutionMechanic(pattern)} CTA/offer cue: ${sanitizeInspirationText(pattern.cta || pattern.offer) || "soft save/comment/shop cue"}.`,
+    "Adapt as ILARIA, not a copy: keep only the format logic, swap in our product proof, comfort language, and calmer visual system.",
   ]);
   const targetCompetitorCount = Math.min(Math.ceil(targetCount * 0.55), competitorItems.length);
   const priorityItems = recommendationItems.length
@@ -2097,15 +2154,21 @@ function normalizeCompetitorFormat(format: string, index: number) {
 }
 
 function adaptCompetitorHook(pattern: CompetitorPlanPattern) {
-  if (pattern.hook) {
-    return `ILARIA take on: ${pattern.hook}`;
+  const hook = sanitizeInspirationText(pattern.hook);
+
+  if (/\b(comfort|comfortable|fabric|detail|stretch|try|style)\b/i.test(`${hook} ${pattern.visualPattern}`)) {
+    return "ILARIA product proof: comfort shown through close-up detail, movement, try-on, and real outfit styling.";
   }
 
   if (pattern.offer) {
-    return `The offer worked for ${pattern.competitorName}; make it feel like comfort reassurance, not pressure.`;
+    return "The offer mechanic worked elsewhere; make it feel like ILARIA comfort reassurance, not pressure.";
   }
 
-  return `A ${pattern.competitorName} pattern overperformed; rebuild it around support without punishment.`;
+  if (hook) {
+    return `ILARIA take on: ${hook}`;
+  }
+
+  return "A source-post pattern overperformed; rebuild it around ILARIA support without punishment.";
 }
 
 function buildPacketFallback(
@@ -2303,10 +2366,10 @@ function planLooksUsable(plan: RawPlanItem[]) {
 function normalizePlanItem(item: RawPlanItem, profile: NormalizedProfile, index: number): PlanItem {
   const rawPlatform = String(item.platform).toUpperCase();
   const platform = rawPlatform === "TIKTOK" ? Platform.TIKTOK : rawPlatform === "INSTAGRAM" ? Platform.INSTAGRAM : Platform.BOTH;
-  const theme = safeText(item.theme) || profile.contentPillars[index % profile.contentPillars.length] || "Fit education";
-  const goal = safeText(item.goal) || profile.goals[index % profile.goals.length] || "Follower growth";
-  const angle = safeText(item.angle) || buildAngle(theme, goal, profile.brandName, index);
-  const format = safeText(item.format) || ["Reel", "Carousel", "Editorial graphic", "Product banner", "Collage"][index % 5];
+  const theme = sanitizeInspirationText(safeText(item.theme)) || profile.contentPillars[index % profile.contentPillars.length] || "Fit education";
+  const goal = sanitizeInspirationText(safeText(item.goal)) || profile.goals[index % profile.goals.length] || "Follower growth";
+  const angle = sanitizeInspirationText(safeText(item.angle)) || buildAngle(theme, goal, profile.brandName, index);
+  const format = sanitizeInspirationText(safeText(item.format)) || ["Reel", "Carousel", "Editorial graphic", "Product banner", "Collage"][index % 5];
 
   return {
     platform,
@@ -2314,9 +2377,9 @@ function normalizePlanItem(item: RawPlanItem, profile: NormalizedProfile, index:
     format,
     theme,
     angle,
-    visualConcept: safeText(item.visualConcept) || "Full-bleed soft modern visual with one clear hook and one proof detail.",
-    tiktokExecution: safeText(item.tiktokExecution) || `Turn this into a fast recognition-led ${format.toLowerCase()} with a clear first-second hook.`,
-    instagramExecution: safeText(item.instagramExecution) || `Adapt the same idea into a polished ${format.toLowerCase()} with readable cover text and saveable structure.`,
+    visualConcept: sanitizeInspirationText(safeText(item.visualConcept)) || "Full-bleed soft modern visual with one clear hook and one proof detail.",
+    tiktokExecution: sanitizeInspirationText(safeText(item.tiktokExecution)) || `Turn this into a fast recognition-led ${format.toLowerCase()} with a clear first-second hook.`,
+    instagramExecution: sanitizeInspirationText(safeText(item.instagramExecution)) || `Adapt the same idea into a polished ${format.toLowerCase()} with readable cover text and saveable structure.`,
   };
 }
 
