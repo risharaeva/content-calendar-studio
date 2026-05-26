@@ -40,6 +40,7 @@ import { safeArray, safeObject, splitLines, toLineBlock } from "@/lib/utils";
 
 const DEFAULT_PROJECT_ID = 1;
 const SETTINGS_ID = 1;
+const ILARIA_BRAND_HASHTAG = "#ILARIAIntimates";
 const FOREIGN_BRAND_PATTERN =
   /\b(GORMASH|GOURMAGE|SKIMS|HONEYLOVE|LEONISA|SHAPERMINT|SPANX|THIRDLOVE|YUMMIE|SHAPELLX|UNDEROUTFIT|AGENT\s+PROVOCATEUR)\b/gi;
 
@@ -1512,7 +1513,7 @@ async function buildPacket(
         `Banner/layout reference folder/file: ${normalizedProfile.bannerReferenceUrl}`,
         `Layout reference notes: ${normalizedProfile.layoutReferenceNotes}`,
         `Caption inspiration patterns to adapt, not copy: ${captionStyleGuide || "none captured yet"}`,
-        'Return one object with keys objective, coreAngle, hookVariants (3 strings), captionVariants (2 strings), ctaVariants (2 strings), hashtagSet (4 strings), visualBrief, imagePromptVariants (2 strings), reviewChecklist (3 strings).',
+        'Return one object with keys objective, coreAngle, hookVariants (3 strings), captionVariants (2 strings), ctaVariants (2 strings), hashtagSet (8 strings), visualBrief, imagePromptVariants (2 strings), reviewChecklist (3 strings).',
         "Caption rules:",
         "- Captions must sound social-native, specific, and human, not like brand manifesto copy.",
         "- Use one concrete opening line from the post angle, then a short useful observation, proof, or fit logic.",
@@ -1521,6 +1522,10 @@ async function buildPacket(
         "- For carousels: caption should tell people why to save or swipe, then add one practical takeaway.",
         "- For banners/offers: caption should connect the offer to a real-life reason to act now, not shout generic discount language.",
         "- Avoid generic lines like 'discover comfort', 'feel confident', 'upgrade your wardrobe', 'designed for every body', or 'embrace your curves'.",
+        "Hashtag rules:",
+        `- The first hashtag must be ${ILARIA_BRAND_HASHTAG}.`,
+        "- Add searchable product/category hashtags people would use to find the item, such as shapewear, bra fit, seamless underwear, bodysuit, no-show underwear, comfortable bra, or full bust support.",
+        "- Avoid vague mood-only hashtags unless there is still room after product search tags.",
         "Make the copy operational and ready to paste into Instagram/TikTok.",
       ].join("\n"),
     });
@@ -1706,7 +1711,7 @@ function buildCaptionFallbacks(
   const proofLine = buildCaptionProofLine(post);
   const ctaCue = sanitizeInspirationText(captionPatterns.find((pattern) => pattern.cta.trim())?.cta.trim() ?? "");
   const offerCue = sanitizeInspirationText(captionPatterns.find((pattern) => pattern.offer.trim())?.offer.trim() ?? "");
-  const inspirationHook = sanitizeInspirationText(captionPatterns.find((pattern) => pattern.hook.trim())?.hook.trim() ?? "");
+  const inspirationHook = findUsefulInspirationHook(captionPatterns);
   const firstCta = ctaCue || "Save this before your next outfit decision.";
   const secondCta = post.format.toLowerCase().includes("carousel")
     ? "Swipe through it now, save it for the fitting-room moment later."
@@ -1752,6 +1757,111 @@ function buildCaptionProofLine(post: ContentPost) {
   }
 
   return "The real test is not the first mirror check. It is what still feels good halfway through the day.";
+}
+
+function findUsefulInspirationHook(captionPatterns: CompetitorPlanPattern[]) {
+  for (const pattern of captionPatterns) {
+    const hook = sanitizeInspirationText(pattern.hook);
+
+    if (captionHookLooksUseful(hook)) {
+      return hook;
+    }
+  }
+
+  return "";
+}
+
+function captionHookLooksUseful(hook: string) {
+  const text = hook.trim();
+
+  if (text.length < 35 || text.split(/\s+/).length < 6) {
+    return false;
+  }
+
+  const generic =
+    /\b(let'?s do this|clean,?\s+clear|beautifully crafted|we aim for nothing less|shop now|tap to shop|link in bio|comment below|save for later|read more|learn more|new post|best url|untitled inspiration)\b/i;
+
+  return !generic.test(text);
+}
+
+function buildHashtagSet(post: ContentPost, profile: NormalizedProfile) {
+  const context = [
+    post.theme,
+    post.angle,
+    post.goal,
+    post.format,
+    post.visualConcept,
+    post.tiktokExecution,
+    post.instagramExecution,
+    profile.monthlyProductFocus,
+    ...profile.contentPillars,
+  ].join(" ").toLowerCase();
+
+  const candidates = [
+    ILARIA_BRAND_HASHTAG,
+    "#Shapewear",
+    "#Intimates",
+    "#ComfortUnderwear",
+  ];
+
+  if (/\b(bra|бюст|лиф|cup|cups|full bust|support)\b/i.test(context)) {
+    candidates.push("#BraFit", "#ComfortBra", "#FullBustSupport");
+  }
+
+  if (/\b(body|bodysuit|боди)\b/i.test(context)) {
+    candidates.push("#Bodysuit", "#ShapingBodysuit");
+  }
+
+  if (/\b(seamless|smooth|line|lines|dress|outfit|under clothing|no show|невидим)\b/i.test(context)) {
+    candidates.push("#SeamlessUnderwear", "#NoShowUnderwear", "#UnderOutfit");
+  }
+
+  if (/\b(size|fit|fitting|размер|посадк)\b/i.test(context)) {
+    candidates.push("#BraFit", "#FitTips", "#UnderwearFit");
+  }
+
+  if (/\b(carousel|guide|how to|education|tips|checklist)\b/i.test(context)) {
+    candidates.push("#FitGuide", "#StyleTips");
+  }
+
+  candidates.push("#EverydayUnderwear", "#WomenOver40Style", "#LingerieFit");
+
+  return dedupeHashtags(candidates).slice(0, 8);
+}
+
+function mergeHashtagSet(generated: string[], required: string[]) {
+  return dedupeHashtags([ILARIA_BRAND_HASHTAG, ...generated, ...required]).slice(0, 8);
+}
+
+function dedupeHashtags(values: string[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const tag = normalizeHashtag(value);
+    const key = tag.toLowerCase();
+
+    if (!tag || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(tag);
+  }
+
+  return result;
+}
+
+function normalizeHashtag(value: string) {
+  const text = safeText(value).trim();
+
+  if (!text) {
+    return "";
+  }
+
+  const body = text.replace(/^#+/, "").replace(/[^\p{L}\p{N}_]/gu, "");
+
+  return body ? `#${body}` : "";
 }
 
 function normalizeCaptionSentence(value: string) {
@@ -2189,7 +2299,7 @@ function buildPacketFallback(
     ],
     captionVariants,
     ctaVariants: ["Save this before your next outfit decision.", "Comment FIT if you want help choosing your first size."],
-    hashtagSet: ["#comfortfirst", "#brafit", "#shapewear", "#over40style"],
+    hashtagSet: buildHashtagSet(post, profile),
     visualBrief: `${post.visualConcept || "Use a full-bleed, soft sensual modern visual with one clear hook and one proof detail."} TikTok: ${post.tiktokExecution || "Lead with recognition."} Instagram: ${post.instagramExecution || "Polish the cover and make it saveable."}`,
     imagePromptVariants: [
       `Soft sensual modern ILARIA social image for ${lowerTheme}, woman 38-55, real-life dressing moment, premium realism, full-bleed crop, calm product detail`,
@@ -2496,6 +2606,7 @@ function normalizePacket(
   const captions = safeArray(packet.captionVariants)
     .filter((caption) => captionLooksSpecific(caption))
     .slice(0, 2);
+  const hashtags = mergeHashtagSet(safeArray(packet.hashtagSet), buildHashtagSet(post, profile));
 
   return {
     objective: safeText(packet.objective) || post.goal,
@@ -2503,7 +2614,7 @@ function normalizePacket(
     hookVariants: safeArray(packet.hookVariants).slice(0, 3),
     captionVariants: captions.length >= 2 ? captions : fallbackCaptions,
     ctaVariants: safeArray(packet.ctaVariants).slice(0, 2),
-    hashtagSet: safeArray(packet.hashtagSet).slice(0, 6),
+    hashtagSet: hashtags,
     visualBrief: safeText(packet.visualBrief) || "Use a clean, believable scene with a premium editorial feel.",
     imagePromptVariants: safeArray(packet.imagePromptVariants).slice(0, 2),
     reviewChecklist: safeArray(packet.reviewChecklist).slice(0, 3),
@@ -2517,7 +2628,8 @@ function packetLooksUsable(packet: GeneratedPacket) {
 
 function captionLooksSpecific(caption: string) {
   const text = caption.trim();
-  const generic = /\b(discover comfort|embrace your curves|feel confident|upgrade your wardrobe|designed for every body|choose ilaria|perfect for any occasion|elevate your everyday|style meets comfort)\b/i;
+  const generic =
+    /\b(let'?s do this|clean,?\s+clear|beautifully crafted|we aim for nothing less|discover comfort|embrace your curves|feel confident|upgrade your wardrobe|designed for every body|choose ilaria|perfect for any occasion|elevate your everyday|style meets comfort)\b/i;
 
   return text.length >= 80 && !generic.test(text);
 }
