@@ -9,11 +9,14 @@ import {
   ImageAssetType,
   ManualVerdict,
   Platform,
+  PlanEvent,
+  PlanEventType,
   PostStatus,
   Project,
   ProjectProfile,
   PublishedPost,
   ReviewResult,
+  ThemeRecommendation,
 } from "@prisma/client";
 import { DEFAULT_OLLAMA_MODEL, GOAL_LIBRARY } from "@/lib/constants";
 import { isImageRenderingConfigured, renderPromptToImage } from "@/lib/image-renderer";
@@ -28,6 +31,7 @@ import {
   ContentPostDto,
   DashboardState,
   ImageAssetDto,
+  PlanEventDto,
   PublishedPostDto,
   ProjectDto,
   ProjectProfileDto,
@@ -72,6 +76,10 @@ interface PlanItem {
   visualConcept: string;
   tiktokExecution: string;
   instagramExecution: string;
+}
+
+interface DatedPlanItem extends PlanItem {
+  plannedDate: Date;
 }
 
 interface GeneratedPacket {
@@ -171,6 +179,17 @@ interface CompetitorPostInput {
   shares: number;
   saves: number;
   notes: string;
+  isActive: boolean;
+}
+
+interface PlanEventInput {
+  type: PlanEventType;
+  title: string;
+  eventDate: Date;
+  description: string;
+  requiredTopic: string;
+  offer: string;
+  platform: Platform;
   isActive: boolean;
 }
 
@@ -414,6 +433,19 @@ export async function getDashboardState(projectId = DEFAULT_PROJECT_ID): Promise
       },
     ],
   });
+  const planEvents = await prisma.planEvent.findMany({
+    where: {
+      projectId: activeProject.id,
+    },
+    orderBy: [
+      {
+        eventDate: "asc",
+      },
+      {
+        createdAt: "asc",
+      },
+    ],
+  });
   const publishedPosts = await prisma.publishedPost.findMany({
     where: {
       projectId: activeProject.id,
@@ -481,6 +513,7 @@ export async function getDashboardState(projectId = DEFAULT_PROJECT_ID): Promise
     todayPriorities,
     calendar,
     imageAssets: imageAssets.map(mapImageAsset),
+    planEvents: planEvents.map(mapPlanEvent),
     publishedPosts: publishedPosts.map(mapPublishedPost),
     competitorPosts: mapCompetitorPosts(competitorPosts),
     recentPerformance: reviewed
@@ -515,7 +548,7 @@ export async function generateMonthlyPlan(projectId = DEFAULT_PROJECT_ID) {
   await ensureProjectData(projectId);
 
   const thirtyDaysAgo = subDays(new Date(), 30);
-  const [profile, settings, existingReviewedPosts, competitorPosts] = await Promise.all([
+  const [profile, settings, existingReviewedPosts, competitorPosts, recommendations] = await Promise.all([
     prisma.projectProfile.findUniqueOrThrow({ where: { projectId } }),
     prisma.appSettings.findUniqueOrThrow({ where: { id: SETTINGS_ID } }),
     prisma.contentPost.findMany({
@@ -541,19 +574,51 @@ export async function generateMonthlyPlan(projectId = DEFAULT_PROJECT_ID) {
         publishedAt: "desc",
       },
     }),
+    prisma.themeRecommendation.findMany({
+      where: {
+        projectId,
+      },
+      orderBy: {
+        rank: "asc",
+      },
+      take: 5,
+    }),
   ]);
 
   const competitorPatterns = buildCompetitorPlanPatterns(competitorPosts);
   const planningPeriod = resolvePlanningPeriod(profile);
   const targetPostCount = planningPeriod.postCount;
-  const planItems = await buildMonthlyPlan(
-    profile,
-    settings,
-    existingReviewedPosts.map((post) => post.theme),
-    competitorPatterns,
-    targetPostCount,
+  const planEvents = await prisma.planEvent.findMany({
+    where: {
+      projectId,
+      isActive: true,
+      eventDate: {
+        gte: addDays(planningPeriod.startDate, -7),
+        lte: planningPeriod.endDate,
+      },
+    },
+    orderBy: {
+      eventDate: "asc",
+    },
+  });
+  const anchoredPosts = buildPlanEventPosts(planEvents, planningPeriod, profile);
+  const fillPostCount = Math.max(targetPostCount - anchoredPosts.length, 0);
+  const planItems = fillPostCount > 0
+    ? await buildMonthlyPlan(
+        profile,
+        settings,
+        existingReviewedPosts.map((post) => post.theme),
+        competitorPatterns,
+        fillPostCount,
+        recommendations,
+      )
+    : [];
+  const dates = distributePostDatesAroundAnchors(
+    planningPeriod.startDate,
+    planningPeriod.endDate,
+    fillPostCount,
+    anchoredPosts.map((post) => post.plannedDate),
   );
-  const dates = distributePostDates(planningPeriod.startDate, planningPeriod.endDate, targetPostCount);
 
   const existingPosts = await prisma.contentPost.findMany({
     where: {
@@ -565,22 +630,28 @@ export async function generateMonthlyPlan(projectId = DEFAULT_PROJECT_ID) {
   });
 
   const replaceablePostIds = existingPosts.filter((post) => !post.review).map((post) => post.id);
-  const nextPosts = dates.flatMap((date, index) => {
+  const datedPlanItems: DatedPlanItem[] = [
+    ...anchoredPosts,
+    ...dates.map((date, index) => ({
+      ...planItems[index],
+      plannedDate: date,
+    })),
+  ].toSorted((left, right) => left.plannedDate.getTime() - right.plannedDate.getTime());
+
+  const nextPosts = datedPlanItems.flatMap((item) => {
     const hasReviewedPost = existingPosts.some(
       (post) =>
         post.review &&
-        startOfDay(post.plannedDate).getTime() === startOfDay(date).getTime(),
+        startOfDay(post.plannedDate).getTime() === startOfDay(item.plannedDate).getTime(),
     );
 
     if (hasReviewedPost) {
       return [];
     }
 
-    const item = planItems[index];
-
     return [{
       projectId,
-      plannedDate: date,
+      plannedDate: item.plannedDate,
       platform: item.platform,
       goal: item.goal,
       format: item.format,
@@ -726,6 +797,52 @@ export async function updateImageAsset(assetId: string, input: ImageAssetInput) 
   });
 
   return getDashboardState(asset.projectId);
+}
+
+export async function savePlanEvent(projectId: number, input: PlanEventInput) {
+  await ensureProjectData(projectId);
+
+  await prisma.planEvent.create({
+    data: {
+      projectId,
+      type: input.type,
+      title: input.title,
+      eventDate: input.eventDate,
+      description: input.description,
+      requiredTopic: input.requiredTopic,
+      offer: input.offer,
+      platform: input.platform,
+      isActive: input.isActive,
+    },
+  });
+
+  return getDashboardState(projectId);
+}
+
+export async function updatePlanEvent(eventId: string, input: PlanEventInput) {
+  const event = await prisma.planEvent.findUnique({
+    where: { id: eventId },
+  });
+
+  if (!event) {
+    throw new Error("Plan event not found.");
+  }
+
+  await prisma.planEvent.update({
+    where: { id: eventId },
+    data: {
+      type: input.type,
+      title: input.title,
+      eventDate: input.eventDate,
+      description: input.description,
+      requiredTopic: input.requiredTopic,
+      offer: input.offer,
+      platform: input.platform,
+      isActive: input.isActive,
+    },
+  });
+
+  return getDashboardState(event.projectId);
 }
 
 export async function savePublishedPost(projectId: number, input: PublishedPostInput) {
@@ -1274,14 +1391,23 @@ async function buildMonthlyPlan(
   existingThemes: string[],
   competitorPatterns: CompetitorPlanPattern[] = [],
   targetPostCount = 30,
+  recommendations: ThemeRecommendation[] = [],
 ) {
   const normalizedProfile = normalizeProfile(profile);
   const targetCount = clampPostCount(targetPostCount);
   const promptStartDate = resolvePlanningPeriod(profile).startDate;
-  const targetCompetitorCount = Math.min(Math.ceil(targetCount * 0.55), competitorPatterns.length);
+  const recommendationContext = recommendations.map((recommendation) => ({
+    theme: recommendation.theme,
+    goal: recommendation.goal,
+    platform: recommendation.platform,
+    reason: recommendation.reason,
+    suggestedNextAngle: recommendation.suggestedNextAngle,
+    evidence: safeObject(recommendation.evidence),
+  }));
+  const targetCompetitorCount = Math.min(Math.ceil(targetCount * 0.45), competitorPatterns.length);
   const competitorShare = competitorPatterns.length
-    ? `${targetCompetitorCount} inspiration-based adaptations and ${targetCount - targetCompetitorCount} ILARIA-original strategic gap-fill posts`
-    : `0 inspiration-based adaptations and ${targetCount} ILARIA-original strategic gap-fill posts`;
+    ? `${targetCompetitorCount} inspiration-based adaptations, several analytics-backed follow-ups when available, and ${targetCount - targetCompetitorCount} ILARIA-original strategic gap-fill posts`
+    : `0 inspiration-based adaptations, analytics-backed follow-ups when available, and ${targetCount} ILARIA-original strategic gap-fill posts`;
 
   try {
     const response = await generateJsonWithTextRoute<RawPlanResponse>({
@@ -1314,8 +1440,10 @@ async function buildMonthlyPlan(
         `Tone: ${normalizedProfile.tone}`,
         `Language: ${normalizedProfile.language}`,
         `Existing reviewed themes to learn from: ${existingThemes.join(", ") || "none"}`,
+        `Published-post analytics recommendations to prioritize: ${recommendationContext.length ? JSON.stringify(recommendationContext) : "none recomputed yet"}`,
         `Inspiration patterns from last 30 days: ${competitorPatterns.length ? JSON.stringify(competitorPatterns.slice(0, Math.min(15, targetCount))) : "none captured yet"}`,
-        `Balance requirement: create ${competitorShare}. The final plan should feel about 50/50 or 60/40, never a full competitor copy.`,
+        `Balance requirement: create ${competitorShare}. Prioritize our own published-post winners first, then competitor inspiration, then strategy gap-fill. The final plan should feel about 50/50 or 60/40, never a full competitor copy.`,
+        "For analytics-backed follow-ups: repeat the winning format/visual type/behavior from recommendations, but change the theme angle so the content does not feel duplicated.",
         "For inspiration-based posts: adapt the mechanic, hook structure, CTA, offer, or visual system into ILARIA's voice. Do not copy wording, claims, product truth, or brand identity.",
         "For ILARIA-original posts: fill funnel and pillar gaps: attraction, education, trust, desire, conversion; include fit reassurance, long-wear comfort, size/returns trust, support construction, product-on-body, styling, reviews, and TikTok Shop reassurance.",
         "Competitor pattern families allowed: Honeylove-like support without squeeze, Leonisa-like real proof, Shapermint-like fit guidance, Yummie-like everyday comfort, Shapellx-like social-commerce demo, Underoutfit-like fit reassurance. SKIMS is style reference only, not a performance benchmark.",
@@ -1338,7 +1466,7 @@ async function buildMonthlyPlan(
     console.warn("Content plan generation fell back to local ILARIA strategy.", error);
   }
 
-  return buildPlanFallback(normalizedProfile, competitorPatterns, targetCount);
+  return buildPlanFallback(normalizedProfile, competitorPatterns, targetCount, recommendations);
 }
 
 async function buildPacket(
@@ -1640,9 +1768,22 @@ function scoreCompetitorPost(post: Pick<CompetitorPost, "views" | "likes" | "com
   return engagement || 1;
 }
 
-function buildPlanFallback(profile: NormalizedProfile, competitorPatterns: CompetitorPlanPattern[] = [], targetPostCount = 30) {
+function buildPlanFallback(
+  profile: NormalizedProfile,
+  competitorPatterns: CompetitorPlanPattern[] = [],
+  targetPostCount = 30,
+  recommendations: ThemeRecommendation[] = [],
+) {
   const goals = profile.goals.length ? profile.goals : GOAL_LIBRARY;
   const targetCount = clampPostCount(targetPostCount);
+  const recommendationItems = recommendations.slice(0, 5).map((recommendation) => [
+    inferRecommendedFallbackFormat(recommendation.theme),
+    recommendation.theme,
+    recommendation.suggestedNextAngle || `Repeat the winning ${recommendation.theme.toLowerCase()} pattern with a fresh ILARIA angle.`,
+    `Analytics-backed follow-up: ${recommendation.reason}. Use the winning visual/format behavior, but change the story so it does not feel repeated.`,
+    `TikTok version: keep the proven format signal from analytics and make the hook more concrete. Evidence: ${recommendation.evidence}.`,
+    `Instagram version: polish the same winning format as a saveable post or cover. Evidence: ${recommendation.evidence}.`,
+  ]);
 
   const ilariaOriginalItems = [
     ["Reel", "Adult-life microdrama", "The outfit is perfect. The bra situation is not.", "Full-bleed mirror moment: polished outfit, tiny shoulder adjustment, product close-up as the calm fix.", "Open on the line, cut to the outfit almost working, then one close support detail and a dry smile.", "Post as Reel with a clean cover: The outfit is perfect. One detail is not."],
@@ -1686,8 +1827,11 @@ function buildPlanFallback(profile: NormalizedProfile, competitorPatterns: Compe
     `Adapt as ILARIA, not a copy: keep the format logic, swap in our proof, comfort language, and calmer visual system. Source: ${pattern.sourceUrl}`,
   ]);
   const targetCompetitorCount = Math.min(Math.ceil(targetCount * 0.55), competitorItems.length);
-  const balancedItems = competitorItems.length
-    ? interleavePlanItems(competitorItems.slice(0, targetCompetitorCount), ilariaOriginalItems, targetCount)
+  const priorityItems = recommendationItems.length
+    ? interleavePlanItems(recommendationItems, competitorItems.slice(0, targetCompetitorCount), Math.max(recommendationItems.length + targetCompetitorCount, 1))
+    : competitorItems.slice(0, targetCompetitorCount);
+  const balancedItems = priorityItems.length
+    ? interleavePlanItems(priorityItems, ilariaOriginalItems, targetCount)
     : repeatPlanItems(ilariaOriginalItems, targetCount);
 
   return balancedItems.slice(0, targetCount).map(([format, theme, angle, visualConcept, tiktokExecution, instagramExecution], index) => ({
@@ -1700,6 +1844,17 @@ function buildPlanFallback(profile: NormalizedProfile, competitorPatterns: Compe
     tiktokExecution,
     instagramExecution,
   }));
+}
+
+function inferRecommendedFallbackFormat(theme: string) {
+  const value = theme.toLowerCase();
+
+  if (value.includes("carousel")) return "Carousel";
+  if (value.includes("banner") || value.includes("graphic")) return "Offer banner";
+  if (value.includes("collage")) return "Collage";
+  if (value.includes("product detail")) return "Product banner";
+
+  return "Reel";
 }
 
 function interleavePlanItems(competitorItems: string[][], ownItems: string[][], targetCount: number) {
@@ -1772,6 +1927,148 @@ export function distributePostDates(startDate: Date, endDate: Date, postCount: n
   }
 
   return dates.toSorted((left, right) => left.getTime() - right.getTime());
+}
+
+function distributePostDatesAroundAnchors(
+  startDate: Date,
+  endDate: Date,
+  postCount: number,
+  anchorDates: Date[],
+) {
+  if (postCount <= 0) {
+    return [];
+  }
+
+  const periodDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
+  const anchorKeys = new Set(anchorDates.map(dateKey));
+  const openDates = Array.from({ length: periodDays }, (_, index) => addDays(startDate, index))
+    .filter((date) => !anchorKeys.has(dateKey(date)));
+
+  if (openDates.length && postCount <= openDates.length) {
+    return Array.from({ length: postCount }, (_, index) => {
+      const offset = Math.floor((index * openDates.length) / postCount);
+      return openDates[Math.min(offset, openDates.length - 1)];
+    });
+  }
+
+  return distributePostDates(startDate, endDate, postCount);
+}
+
+function buildPlanEventPosts(
+  events: PlanEvent[],
+  period: ReturnType<typeof resolvePlanningPeriod>,
+  profile: Pick<ProjectProfile, "monthlyPlatformFocus" | "monthlyProductFocus" | "monthlyOffers">,
+): DatedPlanItem[] {
+  return events.flatMap((event) => {
+    if (event.type === PlanEventType.SALE) {
+      return buildSaleEventPosts(event, period, profile);
+    }
+
+    return buildSinglePlanEventPost(event, event.eventDate, period, profile);
+  }).toSorted((left, right) => left.plannedDate.getTime() - right.plannedDate.getTime());
+}
+
+function buildSaleEventPosts(
+  event: PlanEvent,
+  period: ReturnType<typeof resolvePlanningPeriod>,
+  profile: Pick<ProjectProfile, "monthlyPlatformFocus" | "monthlyProductFocus" | "monthlyOffers">,
+) {
+  const offer = event.offer || event.description || profile.monthlyOffers || "the active sale offer";
+  const product = profile.monthlyProductFocus || "selected ILARIA products";
+  const milestones = [
+    {
+      offset: -7,
+      format: "Reel",
+      theme: `${event.title}: sale starts`,
+      angle: `The ${event.title} sale starts now: what to buy first and why it solves a real getting-dressed problem.`,
+      visual: `Warm sale announcement with ${product}, product-on-body or product detail, clean negative space for sale typography, not a loud discount banner.`,
+      tiktok: `Lead with the sale-start hook, then show 2-3 practical product reasons. Offer cue: ${offer}.`,
+      instagram: `Polished Reel or cover-led post announcing the sale with a calm, useful buying angle. Offer cue: ${offer}.`,
+    },
+    {
+      offset: -3,
+      format: "Carousel",
+      theme: `${event.title}: sale reminder`,
+      angle: `Three days left to choose the pieces that make outfits easier, not louder.`,
+      visual: `Saveable carousel logic: product categories, fit reassurance, offer reminder, and one simple decision rule.`,
+      tiktok: `Short reminder: show the product use cases and one fit/trust cue before the sale ends.`,
+      instagram: `Carousel or Reel reminder with a saveable shopping checklist and the sale offer: ${offer}.`,
+    },
+    {
+      offset: -1,
+      format: "Offer banner",
+      theme: `${event.title}: last day tomorrow`,
+      angle: `Tomorrow is the last day: order the base layer before the outfit asks for help again.`,
+      visual: `Clean offer banner with one product focal point, refined warm palette, and empty space for final-day typography added later.`,
+      tiktok: `Quick urgency post without shouting: tomorrow is the last day, show one real-life reason to order.`,
+      instagram: `Offer banner/Reel cover with tasteful urgency and a clear CTA. Offer cue: ${offer}.`,
+    },
+    {
+      offset: 0,
+      format: "Reel",
+      theme: `${event.title}: final hours`,
+      angle: `Only a few hours left: the practical pieces are the ones you will reach for first.`,
+      visual: `Final-hours vertical cover: product detail or product-on-body, refined commercial light, clear negative space for timer/CTA added later.`,
+      tiktok: `Final-hours reminder with product proof, no panic language, clear shop CTA. Offer cue: ${offer}.`,
+      instagram: `Final-hours Reel/Story-style post with clear CTA and product truth. Offer cue: ${offer}.`,
+    },
+  ];
+
+  return milestones.flatMap((milestone) => {
+    const date = addDays(event.eventDate, milestone.offset);
+
+    if (!isDateInsidePeriod(date, period)) {
+      return [];
+    }
+
+    return [{
+      plannedDate: date,
+      platform: event.platform,
+      goal: "Conversion",
+      format: milestone.format,
+      theme: milestone.theme,
+      angle: milestone.angle,
+      visualConcept: `${milestone.visual} Sale event: ${event.description || event.title}.`,
+      tiktokExecution: milestone.tiktok,
+      instagramExecution: milestone.instagram,
+    }];
+  });
+}
+
+function buildSinglePlanEventPost(
+  event: PlanEvent,
+  date: Date,
+  period: ReturnType<typeof resolvePlanningPeriod>,
+  profile: Pick<ProjectProfile, "monthlyPlatformFocus" | "monthlyProductFocus" | "monthlyOffers">,
+) {
+  if (!isDateInsidePeriod(date, period)) {
+    return [];
+  }
+
+  const topic = event.requiredTopic || event.title;
+  const eventTypeLabel = event.type === PlanEventType.LAUNCH ? "Launch" : event.type === PlanEventType.OTHER ? "Calendar event" : "Must-post";
+  const product = profile.monthlyProductFocus || "the selected product focus";
+
+  return [{
+    plannedDate: date,
+    platform: event.platform,
+    goal: event.type === PlanEventType.LAUNCH ? "Launch / conversion" : "Required content",
+    format: event.type === PlanEventType.LAUNCH ? "Reel" : "Carousel",
+    theme: topic,
+    angle: event.description || `${eventTypeLabel}: ${topic}`,
+    visualConcept: `Required date-specific post for ${formatISO(date, { representation: "date" })}. Use ${product} only when relevant. Build the visual around: ${event.description || topic}.`,
+    tiktokExecution: `Create a date-specific TikTok/Reel execution for: ${topic}. Keep the reason for this exact date clear.`,
+    instagramExecution: `Create a polished Instagram version for: ${topic}. Keep the post tied to the calendar date and campaign context.`,
+  }];
+}
+
+function isDateInsidePeriod(date: Date, period: ReturnType<typeof resolvePlanningPeriod>) {
+  const time = startOfDay(date).getTime();
+  return time >= period.startDate.getTime() && time <= period.endDate.getTime();
+}
+
+function dateKey(date: Date) {
+  return formatISO(startOfDay(date), { representation: "date" });
 }
 
 function parsePlanDate(value: string | null | undefined) {
@@ -2236,6 +2533,21 @@ function mapImageAsset(asset: ImageAsset): ImageAssetDto {
     tags: asset.tags,
     notes: asset.notes,
     isActive: asset.isActive,
+  };
+}
+
+function mapPlanEvent(event: PlanEvent): PlanEventDto {
+  return {
+    id: event.id,
+    projectId: event.projectId,
+    type: event.type,
+    title: event.title,
+    eventDate: formatISO(event.eventDate),
+    description: event.description,
+    requiredTopic: event.requiredTopic,
+    offer: event.offer,
+    platform: event.platform,
+    isActive: event.isActive,
   };
 }
 

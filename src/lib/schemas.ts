@@ -88,6 +88,21 @@ export const imageAssetSchema = z.object({
   isActive: z.coerce.boolean().optional().default(true),
 });
 
+export const planEventSchema = z.object({
+  type: z.enum(["MUST_POST", "SALE", "LAUNCH", "OTHER"]).default("MUST_POST"),
+  title: z.string().trim().min(2).max(160),
+  eventDate: z.coerce.date(),
+  description: z.string().trim().max(1200).optional().default(""),
+  requiredTopic: z.string().trim().max(500).optional().default(""),
+  offer: z.string().trim().max(500).optional().default(""),
+  platform: z.enum(["INSTAGRAM", "TIKTOK", "BOTH"]).default("BOTH"),
+  isActive: z.coerce.boolean().optional().default(true),
+});
+
+export const planEventPatchSchema = planEventSchema.extend({
+  isActive: z.coerce.boolean().default(false),
+});
+
 export const publishedPostSchema = z.object({
   platform: z.enum(["INSTAGRAM", "TIKTOK"]),
   postUrl: z.string().trim().url(),

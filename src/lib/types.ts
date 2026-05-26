@@ -6,6 +6,7 @@ export type ImageAssetTypeValue = "PRODUCT" | "PRODUCT_ON_BODY" | "STYLE_REFEREN
 export type ImageProviderValue = "LOCAL_SD_WEBUI" | "OPENAI";
 export type TextProviderValue = "OLLAMA" | "OPENAI" | "ANTHROPIC";
 export type InspirationSourceTypeValue = "COMPETITOR" | "PINTEREST" | "INSTAGRAM" | "TIKTOK" | "INTERNAL";
+export type PlanEventTypeValue = "MUST_POST" | "SALE" | "LAUNCH" | "OTHER";
 
 export interface ProjectDto {
   id: number;
@@ -93,6 +94,19 @@ export interface ImageAssetDto {
   colors: string;
   tags: string;
   notes: string;
+  isActive: boolean;
+}
+
+export interface PlanEventDto {
+  id: string;
+  projectId: number;
+  type: PlanEventTypeValue;
+  title: string;
+  eventDate: string;
+  description: string;
+  requiredTopic: string;
+  offer: string;
+  platform: PlatformValue;
   isActive: boolean;
 }
 
@@ -210,6 +224,7 @@ export interface DashboardState {
   todayPriorities: ContentPostDto[];
   calendar: ContentPostDto[];
   imageAssets: ImageAssetDto[];
+  planEvents: PlanEventDto[];
   publishedPosts: PublishedPostDto[];
   competitorPosts: CompetitorPostDto[];
   recentPerformance: ContentPostDto[];

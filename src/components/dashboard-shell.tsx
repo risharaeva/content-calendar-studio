@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   BarChart3,
   CalendarDays,
+  CalendarPlus,
   Copy,
   ImageIcon,
   Layers3,
@@ -15,7 +16,7 @@ import {
   Target,
 } from "lucide-react";
 import { AUTO_CLASS_LABELS, PLATFORM_OPTIONS, STATUS_LABELS } from "@/lib/constants";
-import { AppSettingsDto, CompetitorPostDto, ContentPostDto, DashboardState, ImageAssetDto, ProjectDto, ProjectProfileDto, PublishedPostDto } from "@/lib/types";
+import { AppSettingsDto, CompetitorPostDto, ContentPostDto, DashboardState, ImageAssetDto, PlanEventDto, ProjectDto, ProjectProfileDto, PublishedPostDto } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface DashboardShellProps {
@@ -106,6 +107,13 @@ const INSPIRATION_SOURCE_TYPES = [
   { value: "INSTAGRAM", label: "Instagram" },
   { value: "TIKTOK", label: "TikTok" },
   { value: "INTERNAL", label: "Internal idea" },
+];
+
+const PLAN_EVENT_TYPES = [
+  { value: "MUST_POST", label: "Must-post topic" },
+  { value: "SALE", label: "Sale / promo" },
+  { value: "LAUNCH", label: "Launch" },
+  { value: "OTHER", label: "Other event" },
 ];
 
 export function DashboardShell({ initialState }: DashboardShellProps) {
@@ -400,6 +408,29 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
     }
   }
 
+  async function handlePlanEventSubmit(formData: FormData, eventId?: string) {
+    const payload = {
+      type: String(formData.get("type") ?? "MUST_POST"),
+      title: String(formData.get("title") ?? ""),
+      eventDate: String(formData.get("eventDate") ?? format(new Date(), "yyyy-MM-dd")),
+      description: String(formData.get("description") ?? ""),
+      requiredTopic: String(formData.get("requiredTopic") ?? ""),
+      offer: String(formData.get("offer") ?? ""),
+      platform: String(formData.get("platform") ?? "BOTH"),
+      isActive: formData.get("isActive") === "on",
+    };
+
+    try {
+      const next = await callJson<DashboardState>(eventId ? `/api/plan-events/${eventId}` : projectUrl("/api/plan-events"), {
+        method: eventId ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      });
+      syncDashboard(next, eventId ? "Plan event updated." : "Plan event added.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Plan event save failed.");
+    }
+  }
+
   async function handlePublishedPostSubmit(formData: FormData) {
     const payload = {
       platform: String(formData.get("platform") ?? "INSTAGRAM"),
@@ -481,7 +512,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                 </div>
               </div>
               <p className="max-w-3xl text-sm leading-6 text-slate-600">
-                Plan the selected content period, generate post packets, review outcomes, and keep the next content direction grounded in evidence.
+                Plan the selected content period from date rules, published-post analytics, inspiration, and brand strategy. Then generate post packets and creative briefs.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -490,27 +521,13 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                 onClick={() =>
                   runDashboardAction(
                     projectUrl("/api/plan/generate-month"),
-                    "Plan regenerated from current inputs.",
-                    "Generating plan from saved inputs...",
+                    "Plan regenerated from date rules, analytics, inspiration, and saved inputs.",
+                    "Generating plan from date rules, analytics, inspiration, and saved inputs...",
                     { savePlanningInputsFirst: true },
                   )
                 }
               >
                 {busyAction?.includes("/api/plan/generate-month") ? "Generating..." : "Create plan"}
-              </ActionButton>
-              <ActionButton
-                disabled={isBusy}
-                tone="secondary"
-                onClick={() =>
-                  runDashboardAction(
-                    projectUrl("/api/insights/recompute"),
-                    "Insights recomputed from current inputs.",
-                    "Recomputing themes from saved inputs...",
-                    { savePlanningInputsFirst: true },
-                  )
-                }
-              >
-                {busyAction?.includes("/api/insights/recompute") ? "Recomputing..." : "Recompute themes"}
               </ActionButton>
             </div>
           </div>
@@ -599,6 +616,46 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                 </ActionButton>
               </div>
             </form>
+
+            <div className={cn("rounded-[16px] border border-[#d7c9b8] bg-white/60 p-3", activeInputTab !== "plan" && "hidden")}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <SectionHeader eyebrow="Important dates" title="Calendar rules for this plan" />
+                <p className="max-w-2xl text-[15px] font-medium leading-6 text-slate-700">
+                  Add topics that must happen on exact dates. Sale events automatically create warm-up posts: 7 days before, 3 days before, 1 day before, and final-hours day.
+                </p>
+              </div>
+              <form
+                action={(formData) => startTransition(() => void handlePlanEventSubmit(formData))}
+                className="mt-4 grid gap-3 rounded-[14px] border border-black/8 bg-[#fffcf7] p-3"
+              >
+                <div className="grid gap-3 md:grid-cols-[180px_180px_minmax(0,1fr)_180px]">
+                  <SelectField label="Event type" name="type" defaultValue="MUST_POST" options={PLAN_EVENT_TYPES} />
+                  <Field label="Date" name="eventDate" defaultValue={dashboard.profile.monthlyStartDate || format(new Date(), "yyyy-MM-dd")} type="date" />
+                  <Field label="Event name" name="title" defaultValue="" />
+                  <SelectField label="Platform" name="platform" defaultValue={dashboard.profile.monthlyPlatformFocus || "BOTH"} options={PLATFORM_OPTIONS} />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field label="Required topic" name="requiredTopic" defaultValue="" textarea />
+                  <Field label="Offer / sale details" name="offer" defaultValue="" textarea />
+                </div>
+                <Field label="Notes for generator" name="description" defaultValue="" textarea />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                    <input name="isActive" type="checkbox" defaultChecked className="h-4 w-4 accent-slate-900" />
+                    Active in Create plan
+                  </label>
+                  <ActionButton type="submit" tone="secondary" disabled={isBusy}>
+                    <CalendarPlus size={15} />
+                    Add date rule
+                  </ActionButton>
+                </div>
+              </form>
+              <PlanEventList
+                events={dashboard.planEvents}
+                isBusy={isBusy}
+                onSubmit={(formData, eventId) => startTransition(() => void handlePlanEventSubmit(formData, eventId))}
+              />
+            </div>
 
             <div className={cn("rounded-[16px] border border-[#e8d1bf] bg-[#fff5eb] p-4", activeInputTab !== "inspiration" && "hidden")}>
               <SectionHeader eyebrow="Inspiration inbox" title="Posts and ideas to repeat" />
@@ -1246,6 +1303,68 @@ function ImageAssetEditor({
   );
 }
 
+function PlanEventList({
+  events,
+  isBusy,
+  onSubmit,
+}: {
+  events: PlanEventDto[];
+  isBusy: boolean;
+  onSubmit: (formData: FormData, eventId: string) => void;
+}) {
+  if (!events.length) {
+    return (
+      <p className="mt-4 rounded-[14px] border border-dashed border-black/12 bg-white/45 p-4 text-[15px] font-medium leading-6 text-slate-700">
+        No fixed dates yet. Create plan will use the period, analytics recommendations, inspiration, and brand strategy only.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-4 grid gap-3">
+      {events.map((event) => (
+        <form
+          key={event.id}
+          action={(formData) => onSubmit(formData, event.id)}
+          className={cn(
+            "grid gap-3 rounded-[14px] border border-black/8 bg-white/65 p-3",
+            !event.isActive && "opacity-60",
+          )}
+        >
+          <div className="grid gap-3 md:grid-cols-[180px_180px_minmax(0,1fr)_180px]">
+            <SelectField label="Event type" name="type" defaultValue={event.type} options={PLAN_EVENT_TYPES} />
+            <Field label="Date" name="eventDate" defaultValue={format(new Date(event.eventDate), "yyyy-MM-dd")} type="date" />
+            <Field label="Event name" name="title" defaultValue={event.title} />
+            <SelectField label="Platform" name="platform" defaultValue={event.platform} options={PLATFORM_OPTIONS} />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Required topic" name="requiredTopic" defaultValue={event.requiredTopic} textarea />
+            <Field label="Offer / sale details" name="offer" defaultValue={event.offer} textarea />
+          </div>
+          <Field label="Notes for generator" name="description" defaultValue={event.description} textarea />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="grid gap-1 text-sm font-medium leading-6 text-slate-700">
+              <span>
+                {labelPlanEventType(event.type)} · {format(new Date(event.eventDate), "MMM d, yyyy")}
+              </span>
+              {event.type === "SALE" ? <span>Sale rule creates 4 anchored posts when dates fall inside the period.</span> : null}
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <input name="isActive" type="checkbox" defaultChecked={event.isActive} className="h-4 w-4 accent-slate-900" />
+                Active
+              </label>
+              <ActionButton type="submit" tone="secondary" disabled={isBusy}>
+                Update rule
+              </ActionButton>
+            </div>
+          </div>
+        </form>
+      ))}
+    </div>
+  );
+}
+
 function VisualReferenceCard({
   image,
   theme,
@@ -1771,6 +1890,10 @@ function labelInspirationSource(sourceType: CompetitorPostDto["sourceType"]) {
 
 function labelImageAssetType(type: ImageAssetDto["type"]) {
   return IMAGE_ASSET_TYPES.find((option) => option.value === type)?.label ?? type;
+}
+
+function labelPlanEventType(type: PlanEventDto["type"]) {
+  return PLAN_EVENT_TYPES.find((option) => option.value === type)?.label ?? type;
 }
 
 function getImageTemplate(key: string) {
