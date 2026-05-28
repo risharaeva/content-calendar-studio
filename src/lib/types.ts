@@ -7,6 +7,39 @@ export type ImageProviderValue = "LOCAL_SD_WEBUI" | "OPENAI" | "SHOOT_STUDIO";
 export type TextProviderValue = "OLLAMA" | "OPENAI" | "ANTHROPIC";
 export type InspirationSourceTypeValue = "COMPETITOR" | "PINTEREST" | "INSTAGRAM" | "TIKTOK" | "INTERNAL";
 export type PlanEventTypeValue = "MUST_POST" | "SALE" | "LAUNCH" | "OTHER";
+export type PostTypeValue = "VIDEO" | "CAROUSEL" | "BANNER";
+export type FrameTypeValue = "WITH_PERSON" | "PRODUCT_ONLY" | "USEFUL" | "OTHER";
+
+export interface VideoSceneDto {
+  index: number;
+  durationSec: number;
+  description: string;
+  onScreenText: string;
+  voiceOver: string;
+}
+
+export interface VideoScriptDto {
+  coverHook: string;
+  scenes: VideoSceneDto[];
+  totalDurationSec: number;
+}
+
+export interface CarouselSlideDto {
+  index: number;
+  frameType: FrameTypeValue;
+  frameDescription: string;
+  kicker: string;
+  headline: string;
+  body: string;
+  mediaPrompt: string;
+}
+
+export interface BannerBriefDto {
+  frameType: FrameTypeValue;
+  frameDescription: string;
+  overlayText: string;
+  imagePrompt: string;
+}
 
 export interface ProjectDto {
   id: number;
@@ -74,6 +107,9 @@ export interface CampaignPacketDto {
   visualBrief: string;
   imagePromptVariants: string[];
   reviewChecklist: string[];
+  videoScript: VideoScriptDto | null;
+  carouselSlides: CarouselSlideDto[];
+  bannerBrief: BannerBriefDto | null;
 }
 
 export interface GeneratedImageDto {
@@ -131,6 +167,10 @@ export interface ContentPostDto {
   plannedDate: string;
   goal: string;
   format: string;
+  postType: PostTypeValue;
+  defaultFrameType: FrameTypeValue;
+  frameDescription: string;
+  productId: string;
   theme: string;
   angle: string;
   visualConcept: string;

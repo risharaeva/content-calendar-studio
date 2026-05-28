@@ -2,6 +2,14 @@ import OpenAI from "openai";
 import { AppSettings, ImageAssetType } from "@prisma/client";
 import { deflateSync } from "node:zlib";
 import { saveBase64Image } from "@/lib/storage";
+import {
+  type ShootStudioProduct,
+  defaultModelForProduct,
+  fetchShootStudioCatalog,
+  findShootStudioProduct,
+  inferShootStudioColor,
+  inferShootStudioProduct,
+} from "@/lib/shoot-studio-catalog";
 
 interface RenderImageInput {
   prompt: string;
@@ -10,6 +18,7 @@ interface RenderImageInput {
   settings: AppSettings;
   referenceImages?: RenderReferenceImage[];
   imageFormatKey?: string;
+  productId?: string;
 }
 
 interface RenderReferenceImage {
@@ -25,82 +34,6 @@ interface StableDiffusionResponse {
 const LOCAL_IMAGE_WIDTH = 768;
 const LOCAL_IMAGE_HEIGHT = 1024;
 const DEFAULT_SHOOT_STUDIO_URL = "https://ilaria-fitting-room.vercel.app";
-
-type ShootStudioProduct = {
-  id: string;
-  name: string;
-  category: "Bra" | "Bodysuit" | "Briefs" | "Shapewear" | "Shorts";
-  colors: string[];
-  support: "Light" | "Medium" | "Firm";
-  sizes: string;
-  needs: string[];
-  fitPromise: string;
-  construction: string[];
-  prompt: string;
-};
-
-const SHOOT_STUDIO_PRODUCTS: ShootStudioProduct[] = [
-  {
-    id: "smoothlayer-bodysuit",
-    name: "SmoothLayer Bodysuit",
-    category: "Bodysuit",
-    colors: ["Cocoa", "Cream", "Obsidian"],
-    support: "Medium",
-    sizes: "S-2XL",
-    needs: ["Light shaping", "Under dresses", "Workwear", "No-show"],
-    fitPromise: "Light-to-medium smoothing for a cleaner line under clothing.",
-    construction: ["round neck", "tank straps", "thong back", "seamless stretch"],
-    prompt: "round-neck seamless tank bodysuit, thong back, light-to-medium smoothing through waist and hips, flexible stretch",
-  },
-  {
-    id: "everyday-v-bra",
-    name: "Everyday V Bra",
-    category: "Bra",
-    colors: ["Latte", "Obsidian"],
-    support: "Light",
-    sizes: "30-36",
-    needs: ["Everyday wear", "No-show", "Under dresses"],
-    fitPromise: "Light seamless support for simple daily outfits.",
-    construction: ["seamless V shape", "light support", "soft band", "minimal lines"],
-    prompt: "light seamless V bra, soft band, minimal visible lines, everyday light support",
-  },
-  {
-    id: "curvehold-suit",
-    name: "CurveHold Shaping Suit",
-    category: "Shapewear",
-    colors: ["Obsidian", "Sandstone"],
-    support: "Firm",
-    sizes: "XS-L",
-    needs: ["Firm shaping", "Under dresses", "No-show"],
-    fitPromise: "Firm shaping through the waist and lower tummy under fitted outfits.",
-    construction: ["seamless compression", "waist control", "lower tummy support", "smooth finish"],
-    prompt: "firm seamless shaping suit with waist control and lower tummy support, smooth finish under clothing",
-  },
-  {
-    id: "everydayease-shorts",
-    name: "EverydayEase Shorts",
-    category: "Shorts",
-    colors: ["Obsidian", "Sandstone"],
-    support: "Light",
-    sizes: "M-XL",
-    needs: ["Breathable", "Low rise", "Everyday wear", "Boxer short"],
-    fitPromise: "Breathable low-rise boxer shorts for light everyday smoothing and layering.",
-    construction: ["low rise below navel", "boxer-short cut", "short upper-thigh inseam", "soft seamless edges", "breathable stretch"],
-    prompt: "breathable low-rise seamless boxer shorts, low rise below the navel, short upper-thigh leg length, light smoothing, soft stretch fabric",
-  },
-  {
-    id: "everyday-briefs",
-    name: "Everyday Briefs",
-    category: "Briefs",
-    colors: ["Latte", "Obsidian"],
-    support: "Light",
-    sizes: "XS-L",
-    needs: ["Everyday wear", "Postpartum support", "No-show"],
-    fitPromise: "Soft seamless briefs for long-wear everyday comfort.",
-    construction: ["soft waistband", "seamless edges", "light coverage", "no compression"],
-    prompt: "soft seamless everyday briefs, light coverage, soft waistband, no compression, smooth under clothing",
-  },
-];
 
 export function isImageRenderingConfigured(settings: Pick<AppSettings, "imageProvider" | "localImageEndpoint">) {
   if (settings.imageProvider === "OPENAI") {
@@ -121,9 +54,10 @@ export async function renderPromptToImage({
   settings,
   referenceImages = [],
   imageFormatKey = "",
+  productId = "",
 }: RenderImageInput) {
   if (settings.imageProvider === "SHOOT_STUDIO") {
-    return renderWithShootStudio(prompt, settings, imageFormatKey);
+    return renderWithShootStudio(prompt, settings, imageFormatKey, productId);
   }
 
   const base64 = settings.imageProvider === "OPENAI"
@@ -136,11 +70,28 @@ export async function renderPromptToImage({
   });
 }
 
-async function renderWithShootStudio(prompt: string, settings: AppSettings, imageFormatKey: string) {
+async function renderWithShootStudio(
+  prompt: string,
+  settings: AppSettings,
+  imageFormatKey: string,
+  productId: string,
+) {
   const baseUrl = normalizeShootStudioUrl(process.env.SHOOT_STUDIO_API_URL ?? settings.localImageEndpoint);
-  const product = inferShootStudioProduct(prompt);
+
+  // Pull the live catalog (falls back to the bundled snapshot) so explicit
+  // product ids always resolve against the same roster Shoot Studio renders from.
+  const catalog = await fetchShootStudioCatalog(baseUrl);
+
+  // Prefer the explicitly selected product. Only guess from prompt text when no
+  // product was chosen for the post (the "Авто по товару" preference relies on a
+  // real product id; inference is the legacy fallback).
+  const product =
+    findShootStudioProduct(productId, catalog.products) ??
+    inferShootStudioProduct(prompt, catalog.products);
+
   const color = inferShootStudioColor(prompt, product);
-  const model = inferShootStudioModel(prompt);
+  // Model is auto-selected by the product's size range, not guessed from prompt.
+  const model = defaultModelForProduct(product, catalog.models);
   const finalPrompt = buildShootStudioPrompt(prompt, product, color, imageFormatKey);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -193,56 +144,6 @@ function normalizeShootStudioUrl(rawUrl: string) {
   return withoutGeneratePath.replace(/\/$/, "");
 }
 
-function inferShootStudioProduct(prompt: string) {
-  const normalized = prompt.toLowerCase();
-  const direct = SHOOT_STUDIO_PRODUCTS.find((product) => (
-    normalized.includes(product.id.toLowerCase()) ||
-    normalized.includes(product.name.toLowerCase()) ||
-    product.name.toLowerCase().split(/\s+/).every((part) => normalized.includes(part))
-  ));
-
-  if (direct) return direct;
-
-  if (/\b(bra|bust|cup|under-bust|v bra|support)\b/i.test(prompt)) {
-    return SHOOT_STUDIO_PRODUCTS.find((product) => product.id === "everyday-v-bra") ?? SHOOT_STUDIO_PRODUCTS[0];
-  }
-
-  if (/\b(shorts|boxer|thigh)\b/i.test(prompt)) {
-    return SHOOT_STUDIO_PRODUCTS.find((product) => product.id === "everydayease-shorts") ?? SHOOT_STUDIO_PRODUCTS[0];
-  }
-
-  if (/\b(brief|briefs|panty|underwear)\b/i.test(prompt)) {
-    return SHOOT_STUDIO_PRODUCTS.find((product) => product.id === "everyday-briefs") ?? SHOOT_STUDIO_PRODUCTS[0];
-  }
-
-  if (/\b(firm|compression|shaping suit|curvehold|tummy)\b/i.test(prompt)) {
-    return SHOOT_STUDIO_PRODUCTS.find((product) => product.id === "curvehold-suit") ?? SHOOT_STUDIO_PRODUCTS[0];
-  }
-
-  return SHOOT_STUDIO_PRODUCTS[0];
-}
-
-function inferShootStudioColor(prompt: string, product: ShootStudioProduct) {
-  const color = product.colors.find((item) => new RegExp(`\\b${escapeRegExp(item)}\\b`, "i").test(prompt));
-  return color ?? product.colors[0] ?? "";
-}
-
-function inferShootStudioModel(prompt: string) {
-  if (/\b(plus|3xl|full curvy|larger body)\b/i.test(prompt)) {
-    return { id: "imani-3xl", name: "Imani", size: "3XL" };
-  }
-
-  if (/\b(xl|2xl|plus-size)\b/i.test(prompt)) {
-    return { id: "celeste-2xl", name: "Celeste", size: "2XL" };
-  }
-
-  if (/\b(l size|size l|curvy|full bust)\b/i.test(prompt)) {
-    return { id: "nora-l", name: "Nora", size: "L" };
-  }
-
-  return { id: "elena-m", name: "Elena", size: "M" };
-}
-
 function buildShootStudioPrompt(prompt: string, product: ShootStudioProduct, color: string, imageFormatKey: string) {
   return [
     "Create one finished photorealistic social-commerce image for ILARIA Intimates.",
@@ -275,10 +176,6 @@ function sizeForFormat(imageFormatKey: string) {
   if (imageFormatKey === "reels_tiktok_cover") return "1024x1536";
   if (imageFormatKey === "product_still") return "1024x1024";
   return "1024x1536";
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function renderWithOpenAI(prompt: string) {

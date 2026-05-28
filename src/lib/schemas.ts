@@ -59,9 +59,16 @@ export const reviewSchema = z.object({
   manualNote: z.string().trim().min(3),
 });
 
+export const postTypeSchema = z.enum(["VIDEO", "CAROUSEL", "BANNER"]);
+export const frameTypeSchema = z.enum(["WITH_PERSON", "PRODUCT_ONLY", "USEFUL", "OTHER"]);
+
 export const postIdeaSchema = z.object({
   goal: z.string().trim().min(2).max(140),
   format: z.string().trim().min(2).max(80),
+  postType: postTypeSchema.default("VIDEO"),
+  defaultFrameType: frameTypeSchema.default("WITH_PERSON"),
+  frameDescription: z.string().trim().max(800).default(""),
+  productId: z.string().trim().max(120).default(""),
   theme: z.string().trim().min(2).max(140),
   angle: z.string().trim().min(3).max(500),
   visualConcept: z.string().trim().max(1200),
@@ -74,6 +81,14 @@ export const postIdeaSchema = z.object({
   imageObjects: z.string().trim().max(800),
   imageImpression: z.string().trim().max(800),
   imageReferenceIds: z.array(z.string().trim().min(1)).default([]),
+}).superRefine((data, ctx) => {
+  if (data.defaultFrameType === "OTHER" && data.frameDescription.trim().length < 3) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["frameDescription"],
+      message: "Frame description is required when frame type is OTHER.",
+    });
+  }
 });
 
 export const imageAssetSchema = z.object({

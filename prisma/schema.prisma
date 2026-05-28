@@ -53,6 +53,19 @@ enum PlanEventType {
   OTHER
 }
 
+enum PostType {
+  VIDEO
+  CAROUSEL
+  BANNER
+}
+
+enum FrameType {
+  WITH_PERSON
+  PRODUCT_ONLY
+  USEFUL
+  OTHER
+}
+
 model ProjectProfile {
   id                Int       @id @default(autoincrement())
   projectId         Int       @unique
@@ -126,6 +139,10 @@ model ContentPost {
   plannedDate DateTime
   goal        String
   format      String          @default("Reel")
+  postType    PostType        @default(VIDEO)
+  defaultFrameType FrameType  @default(WITH_PERSON)
+  frameDescription String     @default("")
+  productId   String          @default("")
   theme       String
   angle       String
   visualConcept       String  @default("")
@@ -201,6 +218,9 @@ model CampaignPacket {
   visualBrief         String
   imagePromptVariants String
   reviewChecklist     String
+  videoScript         String      @default("")
+  carouselSlides      String      @default("[]")
+  bannerBrief         String      @default("")
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
   post                ContentPost @relation(fields: [postId], references: [id], onDelete: Cascade)

@@ -26,15 +26,19 @@ import { computeAutoScore, Metrics } from "@/lib/scoring";
 import { generateJsonWithTextRoute } from "@/lib/text-generation";
 import {
   AppSettingsDto,
+  BannerBriefDto,
   CampaignPacketDto,
+  CarouselSlideDto,
   CompetitorPostDto,
   ContentPostDto,
   DashboardState,
+  FrameTypeValue,
   ImageAssetDto,
   PlanEventDto,
   PublishedPostDto,
   ProjectDto,
   ProjectProfileDto,
+  VideoScriptDto,
 } from "@/lib/types";
 import { safeArray, safeObject, splitLines, toLineBlock } from "@/lib/utils";
 
@@ -132,6 +136,10 @@ interface ProjectInput {
 interface PostIdeaInput {
   goal: string;
   format: string;
+  postType: "VIDEO" | "CAROUSEL" | "BANNER";
+  defaultFrameType: "WITH_PERSON" | "PRODUCT_ONLY" | "USEFUL" | "OTHER";
+  frameDescription: string;
+  productId: string;
   theme: string;
   angle: string;
   visualConcept: string;
@@ -732,6 +740,10 @@ export async function updatePostIdea(postId: string, input: PostIdeaInput) {
       data: {
         goal: input.goal,
         format: input.format,
+        postType: input.postType,
+        defaultFrameType: input.defaultFrameType,
+        frameDescription: input.frameDescription,
+        productId: input.productId,
         theme: input.theme,
         angle: input.angle,
         visualConcept: input.visualConcept,
@@ -1033,6 +1045,7 @@ export async function renderPostImages(postId: string, mode = "cover") {
       variant: index + 1,
       settings,
       imageFormatKey: post.imageFormatKey,
+      productId: post.productId,
       referenceImages: referenceImages.map((asset) => ({
         name: asset.name,
         sourcePath: asset.sourcePath,
@@ -2670,6 +2683,10 @@ function mapPost(post: PostWithRelations): ContentPostDto {
     plannedDate: formatISO(post.plannedDate),
     goal: post.goal,
     format: post.format,
+    postType: post.postType,
+    defaultFrameType: post.defaultFrameType,
+    frameDescription: post.frameDescription,
+    productId: post.productId,
     theme: post.theme,
     angle: post.angle,
     visualConcept: post.visualConcept,
@@ -2816,7 +2833,70 @@ function mapPacket(packet: CampaignPacket): CampaignPacketDto {
     visualBrief: packet.visualBrief,
     imagePromptVariants: safeArray(packet.imagePromptVariants),
     reviewChecklist: safeArray(packet.reviewChecklist),
+    videoScript: parseVideoScript(packet.videoScript),
+    carouselSlides: parseCarouselSlides(packet.carouselSlides),
+    bannerBrief: parseBannerBrief(packet.bannerBrief),
   };
+}
+
+function parseVideoScript(value: string): VideoScriptDto | null {
+  if (!value || !value.trim()) return null;
+  try {
+    const raw = JSON.parse(value) as Partial<VideoScriptDto>;
+    if (!raw || typeof raw !== "object") return null;
+    return {
+      coverHook: typeof raw.coverHook === "string" ? raw.coverHook : "",
+      totalDurationSec: typeof raw.totalDurationSec === "number" ? raw.totalDurationSec : 0,
+      scenes: Array.isArray(raw.scenes)
+        ? raw.scenes.map((scene, index) => ({
+            index: typeof scene?.index === "number" ? scene.index : index,
+            durationSec: typeof scene?.durationSec === "number" ? scene.durationSec : 0,
+            description: typeof scene?.description === "string" ? scene.description : "",
+            onScreenText: typeof scene?.onScreenText === "string" ? scene.onScreenText : "",
+            voiceOver: typeof scene?.voiceOver === "string" ? scene.voiceOver : "",
+          }))
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseCarouselSlides(value: string): CarouselSlideDto[] {
+  if (!value || !value.trim()) return [];
+  try {
+    const raw = JSON.parse(value);
+    if (!Array.isArray(raw)) return [];
+    const validFrameTypes: FrameTypeValue[] = ["WITH_PERSON", "PRODUCT_ONLY", "USEFUL", "OTHER"];
+    return raw.map((slide, index) => ({
+      index: typeof slide?.index === "number" ? slide.index : index,
+      frameType: validFrameTypes.includes(slide?.frameType) ? (slide.frameType as FrameTypeValue) : "WITH_PERSON",
+      frameDescription: typeof slide?.frameDescription === "string" ? slide.frameDescription : "",
+      kicker: typeof slide?.kicker === "string" ? slide.kicker : "",
+      headline: typeof slide?.headline === "string" ? slide.headline : "",
+      body: typeof slide?.body === "string" ? slide.body : "",
+      mediaPrompt: typeof slide?.mediaPrompt === "string" ? slide.mediaPrompt : "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function parseBannerBrief(value: string): BannerBriefDto | null {
+  if (!value || !value.trim()) return null;
+  try {
+    const raw = JSON.parse(value) as Partial<BannerBriefDto>;
+    if (!raw || typeof raw !== "object") return null;
+    const validFrameTypes: FrameTypeValue[] = ["WITH_PERSON", "PRODUCT_ONLY", "USEFUL", "OTHER"];
+    return {
+      frameType: validFrameTypes.includes(raw.frameType as FrameTypeValue) ? (raw.frameType as FrameTypeValue) : "WITH_PERSON",
+      frameDescription: typeof raw.frameDescription === "string" ? raw.frameDescription : "",
+      overlayText: typeof raw.overlayText === "string" ? raw.overlayText : "",
+      imagePrompt: typeof raw.imagePrompt === "string" ? raw.imagePrompt : "",
+    };
+  } catch {
+    return null;
+  }
 }
 
 function profileToDto(profile: ProjectProfile): ProjectProfileDto {
