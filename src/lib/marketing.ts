@@ -1731,6 +1731,7 @@ async function buildPacket(
         `Layout reference notes: ${normalizedProfile.layoutReferenceNotes}`,
         `Caption inspiration patterns to adapt, not copy: ${captionStyleGuide || "none captured yet"}`,
         'Return one object with keys objective, coreAngle, hookVariants (3 strings), captionVariants (2 strings), ctaVariants (2 strings), hashtagSet (8 strings), visualBrief, imagePromptVariants (2 strings), reviewChecklist (3 strings).',
+        ...buildCompetitorMechanicsGuide(),
         ...postTypeInstructions,
         typeSpecificKey,
         "When a product is named above, make the copy, scenes/slides/banner, and every image prompt specifically about THAT product (its fit promise, needs, and construction). Do not drift to a different garment.",
@@ -1922,6 +1923,150 @@ function buildCaptionStyleGuide(patterns: CompetitorPlanPattern[]) {
   })));
 }
 
+export type PostIntent =
+  | "sizing"
+  | "fit-education"
+  | "support-explainer"
+  | "comfort-proof"
+  | "offer"
+  | "general";
+
+// Lightweight intent detection from the planned post's own fields. Used to make
+// deterministic fallbacks (hooks/CTAs) match the post's actual job instead of
+// emitting the same generic two lines for every post.
+export function detectPostIntent(post: ContentPost): PostIntent {
+  const text =
+    `${post.theme} ${post.angle} ${post.goal} ${post.format} ${post.visualConcept} ${post.tiktokExecution} ${post.instagramExecution}`.toLowerCase();
+
+  if (/\b(offer|sale|discount|exchange|returns?|free shipping|deal|promo|bundle|installment)\b/.test(text)) {
+    return "offer";
+  }
+  if (/\b(size|sizing|true to size|measure|measurement|band size|between sizes|cup size)\b/.test(text)) {
+    return "sizing";
+  }
+  if (/\b(support|construction|fabric|underwire|wireless|breakdown|material|holds|how it'?s made)\b/.test(text)) {
+    return "support-explainer";
+  }
+  if (/\b(all[- ]day|12[- ]hour|wear test|real day|hour 11|hours|honest review|review|proof)\b/.test(text)) {
+    return "comfort-proof";
+  }
+  if (/\b(fit|education|guide|how to|tips|learn|explain|teach)\b/.test(text)) {
+    return "fit-education";
+  }
+  return "general";
+}
+
+// Reusable competitor TEXT mechanics distilled from docs/COMPETITOR_TEXT_ANALYSIS.md.
+// These are STRUCTURES, not competitor wording — and they ship in every packet
+// prompt so generation stays specific and current even when no competitor rows
+// exist in the database (the captionStyleGuide path only fires when such rows are
+// present). Deliberately contains NO competitor brand names so the model can never
+// echo one into published copy.
+export function buildCompetitorMechanicsGuide(): string[] {
+  return [
+    "Write like current, specific shapewear/intimates social copy — not generic brand filler. Adapt the SHAPE of these proven mechanics, never copy any brand's wording, and never name another brand:",
+    "Hook shapes to pull from:",
+    "- Promise + the named downside you remove (support without the squeeze, pinch, or roll-down).",
+    "- Honest expectation: shaping supports and accentuates; it does not 'transform' the body.",
+    "- Mistake-callout that teaches (the most common sizing mistake and why it backfires).",
+    "- Forget-it's-there wearability (all-day, a full 12-hour day, you stop noticing it).",
+    "- Fabric/feature-first: lead with one real, concrete material or construction property.",
+    "- Risk-removal: try at home, free exchanges, easy returns — to cut purchase anxiety.",
+    "- Spec-as-caption: name the exact piece and the size shown as a fit reference.",
+    "CTA rules:",
+    "- Prefer specific product/action CTAs over generic 'shop now' (for example 'See how we size this' or 'Find your band size').",
+    "- Use a fit-help comment CTA where natural ('Ask your fit question below — we answer every one').",
+    "- For offers, use risk-removal CTAs ('Try it at home, keep what works'), not pressure.",
+    "Offer rules — calm and honest only:",
+    "- Allowed: free exchanges, a clear return window, a factual free-shipping threshold, installments.",
+    "- Forbidden: fake urgency, countdowns, 'only a few left', implausible percent-off, manufactured deadlines.",
+    "Proof rhythm:",
+    "- Negation stacking in ILARIA's own words (no digging, no riding up, no all-day adjusting).",
+    "- Number then claim then reassurance, but ONLY with real, verifiable numbers; never invent reviews, ratings, or return windows.",
+    "- Expert-explainer cadence: teach the WHY behind a fit, then present the product as the answer.",
+    "Hard avoids: no body-shaming or 'hide flaws'; no 'transform your body' or 'flawless'; no generic empowerment ('discover comfort', 'feel confident', 'embrace your curves', 'designed for every body', 'goddess', 'unapologetic'); no unsupported claims ('science-backed', 'clinically proven', '#1'); no fabricated testimonials or numbers; never put a competitor or other brand name in copy or hashtags.",
+  ];
+}
+
+function postPieceLabel(post: ContentPost): string {
+  const product = findShootStudioProduct(post.productId, SHOOT_STUDIO_PRODUCTS);
+  return product?.name ?? "this piece";
+}
+
+// Intent-aware deterministic hooks, shaped by the competitor mechanics above. The
+// first hook is always the planner's own angle (the most post-specific line);
+// the other two adapt a mechanic that matches the post's detected intent.
+export function buildHookFallbacks(post: ContentPost): string[] {
+  const lowerTheme = post.theme.toLowerCase();
+  const piece = postPieceLabel(post);
+  const lead = post.angle?.trim()
+    ? post.angle.trim()
+    : `The small ${lowerTheme} detail that changes the whole day.`;
+
+  const byIntent: Record<PostIntent, [string, string]> = {
+    sizing: [
+      "The most common sizing mistake: sizing down for more support. Here's why it backfires.",
+      "Between two sizes? Start with the band — it should feel snug on the loosest hook.",
+    ],
+    "fit-education": [
+      "Here's what 'support' should actually feel like in a bra — and what it shouldn't.",
+      "If your band rides up by lunchtime, it's the fit, not you. Here's why.",
+    ],
+    "support-explainer": [
+      `Support without the squeeze — here's how the ${piece} does it.`,
+      "Hold and lift without all-day pressure. Here's what's actually doing the work.",
+    ],
+    "comfort-proof": [
+      "Worn for a full day — here's what it actually felt like by hour 11.",
+      "No digging. No riding up. No counting the minutes until I could take it off.",
+    ],
+    offer: [
+      "Try it at home — if the fit isn't right, the exchange is on us.",
+      "Worth it when it solves a real getting-dressed problem, not because a banner shouted.",
+    ],
+    general: [
+      "Support should make the outfit easier, not louder.",
+      `The small ${lowerTheme} detail that changes the whole day.`,
+    ],
+  };
+
+  const [second, third] = byIntent[detectPostIntent(post)];
+  return [lead, second, third];
+}
+
+// Intent-aware deterministic CTAs, shaped by the competitor CTA mechanics above
+// (product/action-specific, fit-help, and risk-removal cues — never pressure).
+export function buildCtaFallbacks(post: ContentPost): string[] {
+  const byIntent: Record<PostIntent, [string, string]> = {
+    sizing: [
+      "Find your size in 30 seconds.",
+      "Between sizes? Comment your measurements — we'll help you choose.",
+    ],
+    "fit-education": [
+      "See how we size this.",
+      "Ask your fit question below — we answer every one.",
+    ],
+    "support-explainer": [
+      "See the full breakdown of how it's built.",
+      "Questions about the support? Ask below.",
+    ],
+    "comfort-proof": [
+      "Save this for your next all-day outfit.",
+      "Share your honest first-week notes with us.",
+    ],
+    offer: [
+      "Try it at home — keep what works.",
+      "Free exchanges if the fit isn't right — start with your usual size.",
+    ],
+    general: [
+      "Save this before your next outfit decision.",
+      "Comment FIT and we'll help you choose your size.",
+    ],
+  };
+
+  return [...byIntent[detectPostIntent(post)]];
+}
+
 function buildCaptionFallbacks(
   post: ContentPost,
   profile: NormalizedProfile,
@@ -1933,18 +2078,18 @@ function buildCaptionFallbacks(
   const offerCue = sanitizeInspirationText(captionPatterns.find((pattern) => pattern.offer.trim())?.offer.trim() ?? "");
   const inspirationHook = findUsefulInspirationHook(captionPatterns);
   const firstCta = ctaCue || "Save this before your next outfit decision.";
-  const secondCta = post.format.toLowerCase().includes("carousel")
+  const secondCta = post.postType === "CAROUSEL"
     ? "Swipe through it now, save it for the fitting-room moment later."
     : "Save it for the next morning when the outfit is right and the base layer is negotiating.";
 
-  if (post.format.toLowerCase().includes("carousel")) {
+  if (post.postType === "CAROUSEL") {
     return [
       `${lead}\n\n${proofLine}\n\nThe useful part is not the theory. It is knowing what to check before you order.\n\n${firstCta}`,
       `${inspirationHook ? `${normalizeCaptionSentence(inspirationHook)}\n\n` : ""}${post.theme} should be practical enough to save, not vague enough to scroll past.\n\nStart with the day you actually have, then choose the support level around that.\n\n${secondCta}`,
     ];
   }
 
-  if (post.format.toLowerCase().includes("banner") || post.format.toLowerCase().includes("offer")) {
+  if (post.postType === "BANNER") {
     return [
       `${lead}\n\n${proofLine}\n\n${offerCue ? `${normalizeCaptionSentence(offerCue)} ` : ""}Use the offer when the product solves a real getting-dressed problem, not because a banner shouted at you.\n\n${firstCta}`,
       `${post.theme} works best when the reason to buy is specific: fit, long wear, smoother lines, or one less outfit problem.\n\n${secondCta}`,
@@ -2033,7 +2178,7 @@ function buildHashtagSet(post: ContentPost, profile: NormalizedProfile) {
   }
 
   if (/\b(seamless|smooth|line|lines|dress|outfit|under clothing|no show|невидим)\b/i.test(context)) {
-    candidates.push("#SeamlessUnderwear", "#NoShowUnderwear", "#UnderOutfit");
+    candidates.push("#SeamlessUnderwear", "#NoShowUnderwear", "#InvisibleUnderwear");
   }
 
   if (/\b(size|fit|fitting|размер|посадк)\b/i.test(context)) {
@@ -2512,13 +2657,9 @@ function buildPacketFallback(
   return {
     objective: `${post.goal}: make ${lowerTheme} feel recognizable, useful, and desirable without body-fixing language.`,
     coreAngle: post.angle,
-    hookVariants: [
-      post.angle,
-      `The small ${lowerTheme} detail that changes the whole day.`,
-      `Support should make the outfit easier, not louder.`,
-    ],
+    hookVariants: buildHookFallbacks(post),
     captionVariants,
-    ctaVariants: ["Save this before your next outfit decision.", "Comment FIT if you want help choosing your first size."],
+    ctaVariants: buildCtaFallbacks(post),
     hashtagSet: buildHashtagSet(post, profile),
     visualBrief: `${post.visualConcept || "Use a full-bleed, soft sensual modern visual with one clear hook and one proof detail."} TikTok: ${post.tiktokExecution || "Lead with recognition."} Instagram: ${post.instagramExecution || "Polish the cover and make it saveable."}`,
     imagePromptVariants: [
@@ -2937,9 +3078,18 @@ function normalizePacket(
   captionPatterns: CompetitorPlanPattern[] = [],
 ): GeneratedPacket {
   const fallbackCaptions = buildCaptionFallbacks(post, profile, captionPatterns);
-  const captions = safeArray(packet.captionVariants)
-    .filter((caption) => captionLooksSpecific(caption))
+  const minCaptionLength = minCaptionLengthForPost(post);
+  const liveCaptions = safeArray(packet.captionVariants)
+    .filter((caption) => captionLooksSpecific(caption, minCaptionLength))
     .slice(0, 2);
+  // Keep whatever live captions passed the filter and only top up the remainder
+  // from the deterministic fallbacks, instead of discarding all live captions when
+  // fewer than two survive.
+  const captions = [...liveCaptions];
+  for (const fallback of fallbackCaptions) {
+    if (captions.length >= 2) break;
+    if (!captions.includes(fallback)) captions.push(fallback);
+  }
   const hashtags = mergeHashtagSet(safeArray(packet.hashtagSet), buildHashtagSet(post, profile));
   const typeSpecific = normalizePacketTypeSpecific(packet, post);
 
@@ -2947,7 +3097,7 @@ function normalizePacket(
     objective: safeText(packet.objective) || post.goal,
     coreAngle: safeText(packet.coreAngle) || post.angle,
     hookVariants: safeArray(packet.hookVariants).slice(0, 3),
-    captionVariants: captions.length >= 2 ? captions : fallbackCaptions,
+    captionVariants: captions.slice(0, 2),
     ctaVariants: safeArray(packet.ctaVariants).slice(0, 2),
     hashtagSet: hashtags,
     visualBrief: safeText(packet.visualBrief) || "Use a clean, believable scene with a premium editorial feel.",
@@ -3052,12 +3202,19 @@ function packetLooksUsable(packet: GeneratedPacket) {
   return !banned.test(Object.values(packet).map((value) => safeText(value)).join(" "));
 }
 
-function captionLooksSpecific(caption: string) {
+function minCaptionLengthForPost(post: ContentPost) {
+  // Reels/video captions are meant to be short and witty (see buildPacket caption
+  // rules), so a short live caption is valid and should not be discarded. Carousel
+  // and banner captions carry more explanatory copy, so keep the higher bar.
+  return post.postType === "VIDEO" ? 40 : 80;
+}
+
+function captionLooksSpecific(caption: string, minLength = 80) {
   const text = caption.trim();
   const generic =
     /\b(let'?s do this|clean,?\s+clear|beautifully crafted|we aim for nothing less|discover comfort|embrace your curves|feel confident|upgrade your wardrobe|designed for every body|choose ilaria|perfect for any occasion|elevate your everyday|style meets comfort)\b/i;
 
-  return text.length >= 80 && !generic.test(text);
+  return text.length >= minLength && !generic.test(text);
 }
 
 function buildAngle(theme: string, goal: string, brandName: string, index: number) {
