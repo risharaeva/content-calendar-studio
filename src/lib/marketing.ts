@@ -495,7 +495,7 @@ export async function getDashboardState(projectId = DEFAULT_PROJECT_ID): Promise
 
   const now = new Date();
   const todayPriorities = calendar
-    .filter((post) => post.status !== PostStatus.REVIEWED)
+    .filter((post) => post.status !== PostStatus.DONE)
     .filter((post) => new Date(post.plannedDate) >= startOfDay(now))
     .slice(0, 5);
 
@@ -744,9 +744,26 @@ export async function updatePostIdea(postId: string, input: PostIdeaInput) {
         imageObjects: input.imageObjects,
         imageImpression: input.imageImpression,
         imageReferenceIds: JSON.stringify(input.imageReferenceIds),
-        status: post.review ? PostStatus.REVIEWED : PostStatus.PLANNED,
       },
     });
+  });
+
+  return getDashboardState(post.projectId);
+}
+
+export async function setPostStatus(postId: string, status: PostStatus) {
+  const post = await prisma.contentPost.findUnique({
+    where: { id: postId },
+    select: { projectId: true },
+  });
+
+  if (!post) {
+    throw new Error("Post not found.");
+  }
+
+  await prisma.contentPost.update({
+    where: { id: postId },
+    data: { status },
   });
 
   return getDashboardState(post.projectId);
@@ -961,13 +978,6 @@ export async function generatePostPacket(postId: string) {
       visualBrief: packet.visualBrief,
       imagePromptVariants: JSON.stringify(packet.imagePromptVariants),
       reviewChecklist: JSON.stringify(packet.reviewChecklist),
-    },
-  });
-
-  await prisma.contentPost.update({
-    where: { id: postId },
-    data: {
-      status: PostStatus.PACKET_READY,
     },
   });
 
@@ -1328,7 +1338,7 @@ export async function savePostReview(postId: string, input: Metrics & { manualVe
   await prisma.contentPost.update({
     where: { id: postId },
     data: {
-      status: PostStatus.REVIEWED,
+      status: PostStatus.DONE,
     },
   });
 

@@ -13,7 +13,7 @@ import {
   Sparkles,
   Target,
 } from "lucide-react";
-import { AUTO_CLASS_LABELS, PLATFORM_OPTIONS, STATUS_LABELS } from "@/lib/constants";
+import { AUTO_CLASS_LABELS, PLATFORM_OPTIONS, STATUS_LABELS, STATUS_OPTIONS } from "@/lib/constants";
 import { AppSettingsDto, CompetitorPostDto, ContentPostDto, DashboardState, ImageAssetDto, PlanEventDto, ProjectDto, ProjectProfileDto, PublishedPostDto } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -427,6 +427,18 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
     }
   }
 
+  async function handleStatusChange(postId: string, status: ContentPostDto["status"]) {
+    try {
+      const next = await callJson<DashboardState>(`/api/posts/${postId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      syncDashboard(next, `Status updated to ${STATUS_LABELS[status]}.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Status update failed.");
+    }
+  }
+
   async function handleCompetitorPostSubmit(formData: FormData) {
     const payload = {
       sourceType: String(formData.get("sourceType") ?? "COMPETITOR"),
@@ -831,6 +843,25 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                       {format(new Date(selectedPost.plannedDate), "MMM d")}
                     </span>
                   </div>
+                  <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
+                    Status
+                    <select
+                      value={selectedPost.status}
+                      disabled={isBusy}
+                      onChange={(event) =>
+                        startTransition(() =>
+                          void handleStatusChange(selectedPost.id, event.target.value as ContentPostDto["status"]),
+                        )
+                      }
+                      className="rounded-[10px] border border-black/10 bg-white/90 px-3 py-1.5 text-sm font-medium normal-case tracking-normal text-slate-900 outline-none focus:border-slate-900"
+                    >
+                      {STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <form
                     key={`${selectedPost.id}-${selectedPost.theme}-${selectedPost.angle}-${selectedPost.visualConcept}-${selectedPost.imageFormatKey}`}
                     action={(formData) => startTransition(() => void handlePostIdeaSubmit(formData))}
@@ -1724,8 +1755,12 @@ function groupPostsByDay(posts: ContentPostDto[], startDate: Date, endDate: Date
 }
 
 function postAccentClass(post: ContentPostDto, index: number) {
-  if (post.status === "REVIEWED") {
+  if (post.status === "DONE") {
     return "bg-[#87936d]";
+  }
+
+  if (post.status === "IN_PROGRESS") {
+    return "bg-[#d9a441]";
   }
 
   if (post.packet) {

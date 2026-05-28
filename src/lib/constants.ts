@@ -6,9 +6,15 @@ export const PLATFORM_OPTIONS = [
 
 export const STATUS_LABELS = {
   PLANNED: "Planned",
-  PACKET_READY: "Packet ready",
-  REVIEWED: "Reviewed",
+  IN_PROGRESS: "In progress",
+  DONE: "Done",
 } as const;
+
+export const STATUS_OPTIONS = [
+  { value: "PLANNED", label: "Planned" },
+  { value: "IN_PROGRESS", label: "In progress" },
+  { value: "DONE", label: "Done" },
+] as const;
 
 export const MANUAL_VERDICTS = [
   { value: "WORKED", label: "Worked" },

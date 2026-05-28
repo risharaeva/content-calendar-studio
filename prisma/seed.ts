@@ -149,7 +149,7 @@ async function main() {
         goal: sample.goal,
         theme: sample.theme,
         angle: sample.angle,
-        status: PostStatus.REVIEWED,
+        status: PostStatus.DONE,
       },
     });
 

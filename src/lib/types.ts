@@ -1,5 +1,5 @@
 export type PlatformValue = "INSTAGRAM" | "TIKTOK" | "BOTH";
-export type PostStatusValue = "PLANNED" | "PACKET_READY" | "REVIEWED";
+export type PostStatusValue = "PLANNED" | "IN_PROGRESS" | "DONE";
 export type ManualVerdictValue = "WORKED" | "NEUTRAL" | "MISSED";
 export type AutoClassValue = "WEAK" | "NORMAL" | "STRONG";
 export type ImageAssetTypeValue = "PRODUCT" | "PRODUCT_ON_BODY" | "STYLE_REFERENCE" | "BANNER_REFERENCE" | "BACKGROUND" | "OTHER";

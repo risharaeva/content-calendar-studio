@@ -145,3 +145,7 @@ export const competitorPostSchema = z.object({
 });
 
 export const idSchema = z.string().trim().min(1);
+
+export const postStatusSchema = z.object({
+  status: z.enum(["PLANNED", "IN_PROGRESS", "DONE"]),
+});
