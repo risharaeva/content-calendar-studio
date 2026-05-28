@@ -28,6 +28,32 @@ export const AUTO_CLASS_LABELS = {
   STRONG: "Strong",
 } as const;
 
+export const POST_TYPE_LABELS = {
+  VIDEO: "Video",
+  CAROUSEL: "Carousel",
+  BANNER: "Banner",
+} as const;
+
+export const POST_TYPE_OPTIONS = [
+  { value: "VIDEO", label: "Video" },
+  { value: "CAROUSEL", label: "Carousel" },
+  { value: "BANNER", label: "Banner" },
+] as const;
+
+export const FRAME_TYPE_LABELS = {
+  WITH_PERSON: "With person",
+  PRODUCT_ONLY: "Product only",
+  USEFUL: "Useful / infographic",
+  OTHER: "Other (describe)",
+} as const;
+
+export const FRAME_TYPE_OPTIONS = [
+  { value: "WITH_PERSON", label: "With person" },
+  { value: "PRODUCT_ONLY", label: "Product only" },
+  { value: "USEFUL", label: "Useful / infographic" },
+  { value: "OTHER", label: "Other (describe)" },
+] as const;
+
 export const GOAL_LIBRARY = [
   "Follower growth",
   "Lead generation",

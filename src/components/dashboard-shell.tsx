@@ -13,8 +13,8 @@ import {
   Sparkles,
   Target,
 } from "lucide-react";
-import { AUTO_CLASS_LABELS, PLATFORM_OPTIONS, STATUS_LABELS, STATUS_OPTIONS } from "@/lib/constants";
-import { AppSettingsDto, CompetitorPostDto, ContentPostDto, DashboardState, ImageAssetDto, PlanEventDto, ProjectDto, ProjectProfileDto, PublishedPostDto } from "@/lib/types";
+import { AUTO_CLASS_LABELS, FRAME_TYPE_OPTIONS, PLATFORM_OPTIONS, POST_TYPE_OPTIONS, STATUS_LABELS, STATUS_OPTIONS } from "@/lib/constants";
+import { AppSettingsDto, CompetitorPostDto, ContentPostDto, DashboardState, FrameTypeValue, ImageAssetDto, PlanEventDto, ProjectDto, ProjectProfileDto, PublishedPostDto } from "@/lib/types";
 import { SHOOT_STUDIO_PRODUCTS, type ShootStudioProduct } from "@/lib/shoot-studio-catalog";
 import { cn } from "@/lib/utils";
 
@@ -121,6 +121,8 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
   const [activeTab, setActiveTab] = useState<"inputs" | "calendar" | "analytics">("inputs");
   const [activeInputTab, setActiveInputTab] = useState<"plan" | "inspiration" | "strategy" | "advanced">("plan");
   const [productOptions, setProductOptions] = useState<ShootStudioProduct[]>(SHOOT_STUDIO_PRODUCTS);
+  const [frameTypeChoice, setFrameTypeChoice] = useState<FrameTypeValue>("WITH_PERSON");
+  const [frameTypePostId, setFrameTypePostId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const isBusy = isPending || busyAction !== null;
 
@@ -150,6 +152,16 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
 
   const selectedPost =
     dashboard.calendar.find((post) => post.id === selectedPostId) ?? dashboard.calendar[0] ?? null;
+  const selectedPostFrameType = selectedPost?.defaultFrameType ?? "WITH_PERSON";
+
+  // Reset the frame-type control when the selected post changes, so the
+  // conditional "describe" field reflects the post being edited. This is the
+  // "adjust state during render" pattern (no effect, no cascading-render warning).
+  if (selectedPost && selectedPost.id !== frameTypePostId) {
+    setFrameTypePostId(selectedPost.id);
+    setFrameTypeChoice(selectedPostFrameType);
+  }
+
   const selectedProductionPrompt =
     productionPrompt && selectedPost && productionPrompt.postId === selectedPost.id
       ? productionPrompt.text
@@ -372,6 +384,9 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
     const payload = {
       goal: String(formData.get("goal") ?? ""),
       format: String(formData.get("format") ?? ""),
+      postType: String(formData.get("postType") ?? "VIDEO"),
+      defaultFrameType: String(formData.get("defaultFrameType") ?? "WITH_PERSON"),
+      frameDescription: String(formData.get("frameDescription") ?? ""),
       theme: String(formData.get("theme") ?? ""),
       angle: String(formData.get("angle") ?? ""),
       visualConcept: String(formData.get("visualConcept") ?? ""),
@@ -904,6 +919,47 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                       <Field label="Instagram version" name="instagramExecution" defaultValue={selectedPost.instagramExecution} textarea />
                       <Field label="Prepared image / video links, files, or folders" name="assetLinks" defaultValue={selectedPost.assetLinks} textarea />
                     </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="grid gap-2 text-sm font-medium text-slate-800">
+                        <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Post type</span>
+                        <select
+                          name="postType"
+                          defaultValue={selectedPost.postType || "VIDEO"}
+                          className="rounded-[10px] border border-black/10 bg-white/90 px-3 py-2.5 text-[15px] font-medium leading-6 text-slate-950 outline-none focus:border-slate-900 md:text-base"
+                        >
+                          {POST_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="grid gap-2 text-sm font-medium text-slate-800">
+                        <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Frame type</span>
+                        <select
+                          name="defaultFrameType"
+                          value={frameTypeChoice}
+                          onChange={(event) => setFrameTypeChoice(event.currentTarget.value as FrameTypeValue)}
+                          className="rounded-[10px] border border-black/10 bg-white/90 px-3 py-2.5 text-[15px] font-medium leading-6 text-slate-950 outline-none focus:border-slate-900 md:text-base"
+                        >
+                          {FRAME_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    {frameTypeChoice === "OTHER" ? (
+                      <Field
+                        label="Frame description (required for Other)"
+                        name="frameDescription"
+                        defaultValue={selectedPost.frameDescription}
+                        textarea
+                      />
+                    ) : (
+                      <input type="hidden" name="frameDescription" value={selectedPost.frameDescription} />
+                    )}
                     <div className="grid gap-3 border border-black/8 bg-white/45 p-3">
                       <SectionHeader
                         eyebrow={isVideoPost(selectedPost) ? "Media brief" : "Image brief"}
@@ -1841,8 +1897,7 @@ function getImageTemplate(key: string) {
 }
 
 function isVideoPost(post: ContentPostDto) {
-  const value = post.format.toLowerCase();
-  return value.includes("reel") || value.includes("video") || value.includes("tiktok") || value.includes("short");
+  return post.postType === "VIDEO";
 }
 
 function buildProductionImagePrompt(post: ContentPostDto, imageAssets: ImageAssetDto[]) {
