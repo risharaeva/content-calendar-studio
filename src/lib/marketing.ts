@@ -23,6 +23,7 @@ import { isImageRenderingConfigured, renderPromptToImage } from "@/lib/image-ren
 import { getOllamaStatus } from "@/lib/ollama";
 import { prisma } from "@/lib/prisma";
 import { computeAutoScore, Metrics } from "@/lib/scoring";
+import { findShootStudioProduct, SHOOT_STUDIO_PRODUCTS } from "@/lib/shoot-studio-catalog";
 import { generateJsonWithTextRoute } from "@/lib/text-generation";
 import {
   AppSettingsDto,
@@ -38,6 +39,7 @@ import {
   PublishedPostDto,
   ProjectDto,
   ProjectProfileDto,
+  VideoSceneDto,
   VideoScriptDto,
 } from "@/lib/types";
 import { safeArray, safeObject, splitLines, toLineBlock } from "@/lib/utils";
@@ -99,6 +101,11 @@ interface GeneratedPacket {
   visualBrief: string;
   imagePromptVariants: string[];
   reviewChecklist: string[];
+  // Type-specific packet sections. Only the one matching post.postType is
+  // populated for a given post; the others stay null/empty.
+  videoScript?: VideoScriptDto | null;
+  carouselSlides?: CarouselSlideDto[];
+  bannerBrief?: BannerBriefDto | null;
 }
 
 interface RecommendationSeed {
@@ -977,6 +984,9 @@ export async function generatePostPacket(postId: string) {
       visualBrief: packet.visualBrief,
       imagePromptVariants: JSON.stringify(packet.imagePromptVariants),
       reviewChecklist: JSON.stringify(packet.reviewChecklist),
+      videoScript: packet.videoScript ? JSON.stringify(packet.videoScript) : "",
+      carouselSlides: JSON.stringify(packet.carouselSlides ?? []),
+      bannerBrief: packet.bannerBrief ? JSON.stringify(packet.bannerBrief) : "",
     },
     create: {
       postId,
@@ -990,6 +1000,9 @@ export async function generatePostPacket(postId: string) {
       visualBrief: packet.visualBrief,
       imagePromptVariants: JSON.stringify(packet.imagePromptVariants),
       reviewChecklist: JSON.stringify(packet.reviewChecklist),
+      videoScript: packet.videoScript ? JSON.stringify(packet.videoScript) : "",
+      carouselSlides: JSON.stringify(packet.carouselSlides ?? []),
+      bannerBrief: packet.bannerBrief ? JSON.stringify(packet.bannerBrief) : "",
     },
   });
 
@@ -1015,11 +1028,6 @@ export async function renderPostImages(postId: string, mode = "cover") {
   const prompts = safeArray(post.packet.imagePromptVariants);
   const renderMode = normalizeRenderMode(mode, post);
 
-  if (renderMode === "carousel") {
-    await replaceGeneratedImages(postId, buildCarouselSlideImages(postWithPacket));
-    return getDashboardState(post.projectId);
-  }
-
   const referenceImages = await prisma.imageAsset.findMany({
     where: {
       projectId: post.projectId,
@@ -1029,6 +1037,43 @@ export async function renderPostImages(postId: string, mode = "cover") {
       isActive: true,
     },
   });
+  const referenceList = referenceImages.map((asset) => ({
+    name: asset.name,
+    sourcePath: asset.sourcePath,
+    type: asset.type,
+  }));
+
+  if (renderMode === "carousel") {
+    const slidePrompts = buildCarouselSlideRenderPrompts(postWithPacket);
+
+    // Render real per-slide images from the packet's carouselSlides[].mediaPrompt
+    // when we have per-slide briefs AND a configured image provider. Otherwise
+    // fall back to the local SVG typography slides, which need no provider so the
+    // carousel button keeps working even before image rendering is set up.
+    if (slidePrompts.length && isImageRenderingConfigured(settings)) {
+      const slideImages: Array<{ prompt: string; imagePath: string; variant: number }> = [];
+
+      for (const [index, prompt] of slidePrompts.entries()) {
+        const imagePath = await renderPromptToImage({
+          prompt,
+          postId,
+          variant: index + 1,
+          settings,
+          imageFormatKey: post.imageFormatKey,
+          productId: post.productId,
+          referenceImages: referenceList,
+        });
+
+        slideImages.push({ prompt, imagePath, variant: index + 1 });
+      }
+
+      await replaceGeneratedImages(postId, slideImages);
+      return getDashboardState(post.projectId);
+    }
+
+    await replaceGeneratedImages(postId, buildCarouselSlideImages(postWithPacket));
+    return getDashboardState(post.projectId);
+  }
 
   const promptsToRender = buildShootStudioRenderPrompts(postWithPacket, prompts, renderMode);
 
@@ -1046,11 +1091,7 @@ export async function renderPostImages(postId: string, mode = "cover") {
       settings,
       imageFormatKey: post.imageFormatKey,
       productId: post.productId,
-      referenceImages: referenceImages.map((asset) => ({
-        name: asset.name,
-        sourcePath: asset.sourcePath,
-        type: asset.type,
-      })),
+      referenceImages: referenceList,
     });
 
     images.push({
@@ -1070,15 +1111,68 @@ function normalizeRenderMode(mode: string, post: ContentPost) {
 
   if (value === "carousel") return "carousel";
   if (value === "scene_refs") return "scene_refs";
-  if (value === "image") return post.imageFormatKey === "carousel" || post.format.toLowerCase().includes("carousel") ? "carousel" : "cover";
+  // Generic "image" requests follow the post type: carousels render slides, the
+  // rest render a single cover (banner brief is handled inside the cover path).
+  if (value === "image") return post.postType === "CAROUSEL" ? "carousel" : "cover";
 
   return "cover";
+}
+
+// Shared frame-type guidance so render prompts respect whether a frame is a
+// model shot, product-only, useful/infographic, or a custom brief.
+function frameTypeRenderGuidance(frameType: FrameTypeValue, frameDescription: string) {
+  switch (frameType) {
+    case "PRODUCT_ONLY":
+      return "Product-only composition: no model, focus on fabric, fit, and construction detail.";
+    case "USEFUL":
+      return "Useful / infographic style: clean explanatory layout, minimal props, room for callouts.";
+    case "OTHER":
+      return frameDescription ? `Custom frame: ${frameDescription}.` : "Custom frame as briefed.";
+    case "WITH_PERSON":
+    default:
+      return "With a model: adult woman 38-55, real-life tasteful moment, product readable.";
+  }
+}
+
+// Turns the packet's per-slide carousel briefs into standalone render prompts.
+// Returns [] when the packet has no carouselSlides (so the caller falls back to
+// the local SVG typography slides).
+function buildCarouselSlideRenderPrompts(post: ContentPost & { packet: CampaignPacket }): string[] {
+  const slides = parseCarouselSlides(post.packet.carouselSlides);
+
+  return slides
+    .map((slide) => {
+      const base = slide.mediaPrompt || post.packet.visualBrief || post.visualConcept || post.angle;
+      if (!base) return "";
+      return [
+        base,
+        `Carousel ${slide.kicker || `slide ${slide.index}`} for "${post.theme}".`,
+        frameTypeRenderGuidance(slide.frameType, slide.frameDescription),
+        "Leave clean negative space for the headline typography added later. No text in the image.",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    })
+    .filter(Boolean);
 }
 
 function buildShootStudioRenderPrompts(post: ContentPost & { packet: CampaignPacket }, prompts: string[], mode: string) {
   const seedPrompt = prompts[0] || post.packet.visualBrief || post.visualConcept || post.angle;
 
   if (mode === "scene_refs") {
+    // Prefer the generated video script's scenes as filming references; fall back
+    // to the generic three-beat structure when there is no script yet.
+    const videoScript = parseVideoScript(post.packet.videoScript);
+    if (videoScript && videoScript.scenes.length) {
+      return videoScript.scenes.map((scene) =>
+        [
+          scene.description || seedPrompt,
+          `Scene reference ${scene.index} for "${post.theme}".`,
+          "Make it useful as a filming reference: clear composition, adult model, product readable, no text.",
+        ].join("\n"),
+      );
+    }
+
     return [
       [
         seedPrompt,
@@ -1098,12 +1192,36 @@ function buildShootStudioRenderPrompts(post: ContentPost & { packet: CampaignPac
     ];
   }
 
+  // BANNER posts render a single banner background from the banner brief.
+  if (post.postType === "BANNER") {
+    const banner = parseBannerBrief(post.packet.bannerBrief);
+    if (banner && (banner.imagePrompt || banner.overlayText)) {
+      return [
+        [
+          banner.imagePrompt || seedPrompt,
+          `Banner background for "${post.theme}".`,
+          frameTypeRenderGuidance(banner.frameType, banner.frameDescription),
+          banner.overlayText
+            ? `Leave generous clean negative space for the overlay text: "${banner.overlayText}".`
+            : "Leave generous clean negative space for overlay text.",
+          "No text in the image.",
+        ].join("\n"),
+      ];
+    }
+  }
+
+  // VIDEO cover uses the script's first-frame hook as the framing intent.
+  const coverHook = post.postType === "VIDEO" ? parseVideoScript(post.packet.videoScript)?.coverHook ?? "" : "";
+
   return [
     [
       seedPrompt,
       `Cover image for "${post.theme}".`,
+      coverHook ? `First-frame hook: "${coverHook}".` : "",
       "Create one strong social first-frame image. Leave clean negative space for typography added later. No text in the image.",
-    ].join("\n"),
+    ]
+      .filter(Boolean)
+      .join("\n"),
   ];
 }
 
@@ -1135,6 +1253,19 @@ function buildCarouselSlideImages(post: ContentPost & { packet: CampaignPacket }
 }
 
 function buildCarouselSlideCopy(post: ContentPost & { packet: CampaignPacket }) {
+  // Prefer the generated per-slide carousel copy when the packet has it, so the
+  // SVG typography slides match the briefed structure instead of the generic
+  // hardcoded fallback below.
+  const generated = parseCarouselSlides(post.packet.carouselSlides);
+  if (generated.length) {
+    return generated.map((slide, index) => ({
+      kicker: slide.kicker || `Slide ${String(index + 1).padStart(2, "0")}`,
+      title: cleanCarouselLine(slide.headline || slide.body || post.angle),
+      body: cleanCarouselLine(slide.body || slide.headline || ""),
+      footer: index === 0 ? "Swipe" : index === generated.length - 1 ? "Save" : `${index + 1}/${generated.length}`,
+    }));
+  }
+
   const hooks = safeArray(post.packet.hookVariants);
   const captions = safeArray(post.packet.captionVariants);
   const ctas = safeArray(post.packet.ctaVariants);
@@ -1498,6 +1629,60 @@ async function buildMonthlyPlan(
   return buildPlanFallback(normalizedProfile, competitorPatterns, targetCount, recommendations);
 }
 
+// Resolves a human-readable product brief for the LLM from the explicit
+// productId chosen in the editor. Uses the bundled catalog snapshot (no network
+// call needed just to describe the garment in a text prompt); an empty/unknown
+// id means "auto — let the model infer the product from the brief".
+function buildProductContext(productId: string): string {
+  const product = findShootStudioProduct(productId, SHOOT_STUDIO_PRODUCTS);
+  if (!product) {
+    return "Product: auto — infer the most fitting ILARIA product from the brief.";
+  }
+  return [
+    `Product: ${product.name} (${product.category})`,
+    `Fit promise: ${product.fitPromise}`,
+    `Key needs: ${product.needs.join(", ")}`,
+    `Colors: ${product.colors.join(", ")}`,
+    `Sizes: ${product.sizes}`,
+  ].join("\n");
+}
+
+// Per-PostType packet instructions. Each post type carries a different packet
+// structure (a filmable script, per-slide briefs, or a single banner brief), so
+// we append the matching instruction block + requested key to the LLM prompt.
+function buildPostTypeInstructions(post: ContentPost): string[] {
+  const frameLine =
+    post.defaultFrameType === "OTHER" && post.frameDescription
+      ? `Default frame type: OTHER — ${post.frameDescription}.`
+      : `Default frame type: ${post.defaultFrameType}.`;
+
+  if (post.postType === "VIDEO") {
+    return [
+      "This is a VIDEO (reel/TikTok) post.",
+      frameLine,
+      "Also return a videoScript object with keys: coverHook (string, the first-frame hook), totalDurationSec (number, 15-45), and scenes (array of 3-6 objects).",
+      "Each scene object has keys: index (1-based number), durationSec (number), description (what is filmed in this scene), onScreenText (caption burned on screen), voiceOver (spoken line, may be empty).",
+      "Scenes must form a clear filmable sequence: hook, problem/tension, product proof, payoff/CTA. Keep each scene concrete and shootable.",
+    ];
+  }
+
+  if (post.postType === "CAROUSEL") {
+    return [
+      "This is a CAROUSEL (multi-slide) post.",
+      frameLine,
+      "Also return carouselSlides: an array of 5-7 slide objects.",
+      "Each slide object has keys: index (1-based number), frameType (one of WITH_PERSON, PRODUCT_ONLY, USEFUL, OTHER), frameDescription (string; fill ONLY when frameType is OTHER, else empty string), kicker (short label like 'Slide 01'), headline (string), body (string), mediaPrompt (a concrete standalone image prompt to shoot THIS slide).",
+      "Vary frameType across the slides (mix WITH_PERSON, PRODUCT_ONLY, and at least one USEFUL/infographic slide). Each mediaPrompt must stand on its own as an image brief.",
+    ];
+  }
+
+  return [
+    "This is a BANNER (single static image with text) post.",
+    frameLine,
+    "Also return a bannerBrief object with keys: frameType (one of WITH_PERSON, PRODUCT_ONLY, USEFUL, OTHER), frameDescription (string; fill ONLY when frameType is OTHER, else empty string), overlayText (the text shown on the banner), imagePrompt (a concrete image prompt for the banner background with clean negative space for the overlay text).",
+  ];
+}
+
 async function buildPacket(
   post: ContentPost,
   profile: ProjectProfile,
@@ -1506,6 +1691,13 @@ async function buildPacket(
 ) {
   const normalizedProfile = normalizeProfile(profile);
   const captionStyleGuide = buildCaptionStyleGuide(captionPatterns);
+  const postTypeInstructions = buildPostTypeInstructions(post);
+  const typeSpecificKey =
+    post.postType === "VIDEO"
+      ? "Also include a videoScript object as described above."
+      : post.postType === "CAROUSEL"
+        ? "Also include a carouselSlides array as described above."
+        : "Also include a bannerBrief object as described above.";
 
   try {
     const packet = await generateJsonWithTextRoute<GeneratedPacket>({
@@ -1522,6 +1714,7 @@ async function buildPacket(
         `Brand voice: ${settings.brandVoice}`,
         `Language: ${normalizedProfile.language}`,
         `Platform: ${post.platform}`,
+        `Post type: ${post.postType}`,
         `Format: ${post.format}`,
         `Goal: ${post.goal}`,
         `Theme: ${post.theme}`,
@@ -1530,6 +1723,7 @@ async function buildPacket(
         `TikTok execution: ${post.tiktokExecution}`,
         `Instagram execution: ${post.instagramExecution}`,
         `Prepared asset links for this post: ${post.assetLinks}`,
+        buildProductContext(post.productId),
         `Visual fonts: ${normalizedProfile.visualFonts}`,
         `Visual colors: ${normalizedProfile.visualColors}`,
         `Product reference folder/file: ${normalizedProfile.productReferenceUrl}`,
@@ -1537,6 +1731,9 @@ async function buildPacket(
         `Layout reference notes: ${normalizedProfile.layoutReferenceNotes}`,
         `Caption inspiration patterns to adapt, not copy: ${captionStyleGuide || "none captured yet"}`,
         'Return one object with keys objective, coreAngle, hookVariants (3 strings), captionVariants (2 strings), ctaVariants (2 strings), hashtagSet (8 strings), visualBrief, imagePromptVariants (2 strings), reviewChecklist (3 strings).',
+        ...postTypeInstructions,
+        typeSpecificKey,
+        "When a product is named above, make the copy, scenes/slides/banner, and every image prompt specifically about THAT product (its fit promise, needs, and construction). Do not drift to a different garment.",
         "Caption rules:",
         "- Captions must sound social-native, specific, and human, not like brand manifesto copy.",
         "- Use one concrete opening line from the post angle, then a short useful observation, proof, or fit logic.",
@@ -2333,6 +2530,120 @@ function buildPacketFallback(
       "Does the copy avoid fixing, hiding, or transformation language?",
       "Is there a clear fit, comfort, proof, or trust cue?",
     ],
+    ...buildTypeSpecificFallback(post),
+  };
+}
+
+// Deterministic type-specific sections used when there is no LLM output. Each
+// returns only the section matching post.postType; the others stay empty so the
+// wrong structure is never persisted.
+function buildTypeSpecificFallback(
+  post: ContentPost,
+): Pick<GeneratedPacket, "videoScript" | "carouselSlides" | "bannerBrief"> {
+  if (post.postType === "VIDEO") {
+    return { videoScript: buildVideoScriptFallback(post), carouselSlides: [], bannerBrief: null };
+  }
+  if (post.postType === "CAROUSEL") {
+    return { videoScript: null, carouselSlides: buildCarouselSlidesFallback(post), bannerBrief: null };
+  }
+  return { videoScript: null, carouselSlides: [], bannerBrief: buildBannerBriefFallback(post) };
+}
+
+function buildVideoScriptFallback(post: ContentPost): VideoScriptDto {
+  const lowerTheme = post.theme.toLowerCase();
+  const scenes: VideoSceneDto[] = [
+    {
+      index: 1,
+      durationSec: 3,
+      description: `Open on a recognizable real-life dressing moment around ${lowerTheme}.`,
+      onScreenText: post.angle,
+      voiceOver: "",
+    },
+    {
+      index: 2,
+      durationSec: 5,
+      description: "Show the everyday tension or doubt this product quietly solves.",
+      onScreenText: "The part nobody talks about",
+      voiceOver: "",
+    },
+    {
+      index: 3,
+      durationSec: 5,
+      description: "Cut to clear product proof: fit, comfort, fabric, or how it sits after movement.",
+      onScreenText: "Here's the difference",
+      voiceOver: "",
+    },
+    {
+      index: 4,
+      durationSec: 4,
+      description: "Close on a calm payoff and a soft CTA.",
+      onScreenText: "Save this for your next order",
+      voiceOver: "",
+    },
+  ];
+  return {
+    coverHook: post.angle || `The small ${lowerTheme} detail that changes the whole day.`,
+    totalDurationSec: scenes.reduce((sum, scene) => sum + scene.durationSec, 0),
+    scenes,
+  };
+}
+
+function buildCarouselSlidesFallback(post: ContentPost): CarouselSlideDto[] {
+  const lowerTheme = post.theme.toLowerCase();
+  const base: Array<Omit<CarouselSlideDto, "index" | "kicker">> = [
+    {
+      frameType: "WITH_PERSON",
+      frameDescription: "",
+      headline: post.angle || `Let's talk about ${lowerTheme}.`,
+      body: "A small fit clue that changes the whole decision.",
+      mediaPrompt: `Soft sensual modern ILARIA cover image for ${lowerTheme}, woman 38-55, real-life dressing moment, premium realism, clean negative space for a headline`,
+    },
+    {
+      frameType: "PRODUCT_ONLY",
+      frameDescription: "",
+      headline: "What to actually look for",
+      body: "Pressure, rolling, straps, fabric tension, and where it sits after ten minutes.",
+      mediaPrompt: `Clean product-only studio shot for ${lowerTheme}, tactile fabric detail, soft daylight, no model, readable construction`,
+    },
+    {
+      frameType: "USEFUL",
+      frameDescription: "",
+      headline: "The quick fit rule",
+      body: "Use this as a calm shopping rule, not a body judgment.",
+      mediaPrompt: `Simple useful infographic-style layout summarizing the fit rule for ${lowerTheme}, brand colors, minimal icons, lots of negative space`,
+    },
+    {
+      frameType: "WITH_PERSON",
+      frameDescription: "",
+      headline: cleanCarouselLine(post.visualConcept || post.goal),
+      body: "How it looks in real clothes, sitting and moving.",
+      mediaPrompt: `Editorial intimates visual for "${post.angle}", warm daylight, polished but human, product readable`,
+    },
+    {
+      frameType: "PRODUCT_ONLY",
+      frameDescription: "",
+      headline: "Save this before your next order",
+      body: "Keep it as a reference when you choose your first size.",
+      mediaPrompt: `Calm closing product flat-lay for ${lowerTheme}, premium packaging feel, brand palette, space for a CTA`,
+    },
+  ];
+  return base.map((slide, index) => ({
+    ...slide,
+    index: index + 1,
+    kicker: `Slide ${String(index + 1).padStart(2, "0")}`,
+  }));
+}
+
+function buildBannerBriefFallback(post: ContentPost): BannerBriefDto {
+  const lowerTheme = post.theme.toLowerCase();
+  const frameType = post.defaultFrameType;
+  return {
+    frameType,
+    frameDescription: frameType === "OTHER" ? post.frameDescription : "",
+    overlayText: post.angle || post.theme,
+    imagePrompt: `Editorial banner background for ${lowerTheme}, premium ILARIA feel, warm daylight, ${
+      frameType === "PRODUCT_ONLY" ? "product-only composition" : "tasteful real-life scene"
+    }, generous clean negative space on one side for overlay text, no text in the image`,
   };
 }
 
@@ -2630,6 +2941,7 @@ function normalizePacket(
     .filter((caption) => captionLooksSpecific(caption))
     .slice(0, 2);
   const hashtags = mergeHashtagSet(safeArray(packet.hashtagSet), buildHashtagSet(post, profile));
+  const typeSpecific = normalizePacketTypeSpecific(packet, post);
 
   return {
     objective: safeText(packet.objective) || post.goal,
@@ -2641,6 +2953,97 @@ function normalizePacket(
     visualBrief: safeText(packet.visualBrief) || "Use a clean, believable scene with a premium editorial feel.",
     imagePromptVariants: safeArray(packet.imagePromptVariants).slice(0, 2),
     reviewChecklist: safeArray(packet.reviewChecklist).slice(0, 3),
+    ...typeSpecific,
+  };
+}
+
+const VALID_FRAME_TYPES: FrameTypeValue[] = ["WITH_PERSON", "PRODUCT_ONLY", "USEFUL", "OTHER"];
+
+function coerceFrameType(value: unknown): FrameTypeValue {
+  return VALID_FRAME_TYPES.includes(value as FrameTypeValue) ? (value as FrameTypeValue) : "WITH_PERSON";
+}
+
+// Keeps only the type-specific section that matches the post type and normalizes
+// it into the DTO shape (falling back to a deterministic structure when the LLM
+// omitted or malformed it). The other two sections are forced empty so they are
+// not persisted for the wrong post type.
+function normalizePacketTypeSpecific(
+  packet: GeneratedPacket,
+  post: ContentPost,
+): Pick<GeneratedPacket, "videoScript" | "carouselSlides" | "bannerBrief"> {
+  if (post.postType === "VIDEO") {
+    return {
+      videoScript: normalizeVideoScript(packet.videoScript) ?? buildVideoScriptFallback(post),
+      carouselSlides: [],
+      bannerBrief: null,
+    };
+  }
+
+  if (post.postType === "CAROUSEL") {
+    const slides = normalizeCarouselSlides(packet.carouselSlides);
+    return {
+      videoScript: null,
+      carouselSlides: slides.length ? slides : buildCarouselSlidesFallback(post),
+      bannerBrief: null,
+    };
+  }
+
+  return {
+    videoScript: null,
+    carouselSlides: [],
+    bannerBrief: normalizeBannerBrief(packet.bannerBrief) ?? buildBannerBriefFallback(post),
+  };
+}
+
+function normalizeVideoScript(value: unknown): VideoScriptDto | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<VideoScriptDto>;
+  const scenes = Array.isArray(raw.scenes) ? raw.scenes : [];
+  const normalizedScenes = scenes.map((scene, index) => ({
+    index: typeof scene?.index === "number" ? scene.index : index + 1,
+    durationSec: typeof scene?.durationSec === "number" ? scene.durationSec : 0,
+    description: safeText(scene?.description),
+    onScreenText: safeText(scene?.onScreenText),
+    voiceOver: safeText(scene?.voiceOver),
+  }));
+  if (!safeText(raw.coverHook) && !normalizedScenes.length) return null;
+  return {
+    coverHook: safeText(raw.coverHook),
+    totalDurationSec:
+      typeof raw.totalDurationSec === "number" && raw.totalDurationSec > 0
+        ? raw.totalDurationSec
+        : normalizedScenes.reduce((sum, scene) => sum + (scene.durationSec || 0), 0),
+    scenes: normalizedScenes,
+  };
+}
+
+function normalizeCarouselSlides(value: unknown): CarouselSlideDto[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((slide, index) => ({
+      index: typeof slide?.index === "number" ? slide.index : index + 1,
+      frameType: coerceFrameType(slide?.frameType),
+      frameDescription: safeText(slide?.frameDescription),
+      kicker: safeText(slide?.kicker) || `Slide ${String(index + 1).padStart(2, "0")}`,
+      headline: safeText(slide?.headline),
+      body: safeText(slide?.body),
+      mediaPrompt: safeText(slide?.mediaPrompt),
+    }))
+    .filter((slide) => slide.headline || slide.body || slide.mediaPrompt)
+    .slice(0, 8);
+}
+
+function normalizeBannerBrief(value: unknown): BannerBriefDto | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<BannerBriefDto>;
+  const overlayText = safeText(raw.overlayText);
+  const imagePrompt = safeText(raw.imagePrompt);
+  if (!overlayText && !imagePrompt) return null;
+  return {
+    frameType: coerceFrameType(raw.frameType),
+    frameDescription: safeText(raw.frameDescription),
+    overlayText,
+    imagePrompt,
   };
 }
 

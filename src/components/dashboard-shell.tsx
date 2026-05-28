@@ -13,8 +13,8 @@ import {
   Sparkles,
   Target,
 } from "lucide-react";
-import { AUTO_CLASS_LABELS, FRAME_TYPE_OPTIONS, PLATFORM_OPTIONS, POST_TYPE_OPTIONS, STATUS_LABELS, STATUS_OPTIONS } from "@/lib/constants";
-import { AppSettingsDto, CompetitorPostDto, ContentPostDto, DashboardState, FrameTypeValue, ImageAssetDto, PlanEventDto, ProjectDto, ProjectProfileDto, PublishedPostDto } from "@/lib/types";
+import { AUTO_CLASS_LABELS, FRAME_TYPE_LABELS, FRAME_TYPE_OPTIONS, PLATFORM_OPTIONS, POST_TYPE_OPTIONS, STATUS_LABELS, STATUS_OPTIONS } from "@/lib/constants";
+import { AppSettingsDto, BannerBriefDto, CarouselSlideDto, CompetitorPostDto, ContentPostDto, DashboardState, FrameTypeValue, ImageAssetDto, PlanEventDto, ProjectDto, ProjectProfileDto, PublishedPostDto, VideoScriptDto } from "@/lib/types";
 import { SHOOT_STUDIO_PRODUCTS, type ShootStudioProduct } from "@/lib/shoot-studio-catalog";
 import { cn } from "@/lib/utils";
 
@@ -1114,6 +1114,15 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                     <PacketSection title="CTAs" items={selectedPost.packet.ctaVariants} />
                     <PacketSection title="Hashtags" items={selectedPost.packet.hashtagSet} inline />
                     <TextBlock title="Visual brief" body={selectedPost.packet.visualBrief} />
+                    {selectedPost.postType === "VIDEO" && selectedPost.packet.videoScript ? (
+                      <VideoScriptBlock script={selectedPost.packet.videoScript} />
+                    ) : null}
+                    {selectedPost.postType === "CAROUSEL" && selectedPost.packet.carouselSlides.length ? (
+                      <CarouselSlidesBlock slides={selectedPost.packet.carouselSlides} />
+                    ) : null}
+                    {selectedPost.postType === "BANNER" && selectedPost.packet.bannerBrief ? (
+                      <BannerBriefBlock brief={selectedPost.packet.bannerBrief} />
+                    ) : null}
                     <PacketSection title="Image prompts" items={selectedPost.packet.imagePromptVariants} />
                     <PacketSection title="Review checklist" items={selectedPost.packet.reviewChecklist} />
 
@@ -1777,6 +1786,87 @@ function TextBlock({ title, body }: { title: string; body: string }) {
     <div className="space-y-2">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">{title}</p>
       <p className="text-[15px] font-medium leading-7 text-slate-900">{body}</p>
+    </div>
+  );
+}
+
+function VideoScriptBlock({ script }: { script: VideoScriptDto }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">
+        Video script{script.totalDurationSec ? ` · ${script.totalDurationSec}s` : ""}
+      </p>
+      {script.coverHook ? (
+        <p className="text-[15px] font-semibold leading-7 text-slate-900">Cover hook: {script.coverHook}</p>
+      ) : null}
+      <div className="grid gap-2">
+        {script.scenes.map((scene) => (
+          <div key={scene.index} className="space-y-1 border border-black/8 bg-white/55 p-3">
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+              <span>Scene {scene.index}</span>
+              {scene.durationSec ? <span>{scene.durationSec}s</span> : null}
+            </div>
+            {scene.description ? (
+              <p className="text-[15px] font-medium leading-6 text-slate-900">{scene.description}</p>
+            ) : null}
+            {scene.onScreenText ? (
+              <p className="text-sm font-medium leading-6 text-slate-700">On-screen: {scene.onScreenText}</p>
+            ) : null}
+            {scene.voiceOver ? (
+              <p className="text-sm font-medium leading-6 text-slate-700">VO: {scene.voiceOver}</p>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CarouselSlidesBlock({ slides }: { slides: CarouselSlideDto[] }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Carousel slides</p>
+      <div className="grid gap-2">
+        {slides.map((slide) => (
+          <div key={slide.index} className="space-y-1 border border-black/8 bg-white/55 p-3">
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+              <span>{slide.kicker || `Slide ${slide.index}`}</span>
+              <span>{FRAME_TYPE_LABELS[slide.frameType]}</span>
+            </div>
+            {slide.headline ? (
+              <p className="text-[15px] font-semibold leading-6 text-slate-900">{slide.headline}</p>
+            ) : null}
+            {slide.body ? <p className="text-sm font-medium leading-6 text-slate-700">{slide.body}</p> : null}
+            {slide.frameType === "OTHER" && slide.frameDescription ? (
+              <p className="text-sm italic leading-6 text-slate-600">Frame: {slide.frameDescription}</p>
+            ) : null}
+            {slide.mediaPrompt ? (
+              <p className="font-mono text-xs leading-5 text-slate-500">{slide.mediaPrompt}</p>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BannerBriefBlock({ brief }: { brief: BannerBriefDto }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">
+        Banner brief · {FRAME_TYPE_LABELS[brief.frameType]}
+      </p>
+      <div className="space-y-1 border border-black/8 bg-white/55 p-3">
+        {brief.overlayText ? (
+          <p className="text-[15px] font-semibold leading-6 text-slate-900">Overlay: {brief.overlayText}</p>
+        ) : null}
+        {brief.frameType === "OTHER" && brief.frameDescription ? (
+          <p className="text-sm italic leading-6 text-slate-600">Frame: {brief.frameDescription}</p>
+        ) : null}
+        {brief.imagePrompt ? (
+          <p className="font-mono text-xs leading-5 text-slate-500">{brief.imagePrompt}</p>
+        ) : null}
+      </div>
     </div>
   );
 }
