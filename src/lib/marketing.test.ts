@@ -3,8 +3,10 @@ import { format } from "date-fns";
 import { describe, expect, it } from "vitest";
 import {
   buildCompetitorMechanicsGuide,
+  buildContentTerritoryGuide,
   buildCtaFallbacks,
   buildHookFallbacks,
+  buildIdeaPoolItems,
   buildStyleGuard,
   detectPostIntent,
   distributePostDates,
@@ -120,5 +122,47 @@ describe("style guard", () => {
 
   it("never names a competitor brand", () => {
     expect(COMPETITOR_NAMES.test(buildStyleGuard().join("\n"))).toBe(false);
+  });
+});
+
+describe("content territory guide", () => {
+  it("never names a competitor brand and avoids age-targeting", () => {
+    const text = buildContentTerritoryGuide().join("\n");
+
+    expect(COMPETITOR_NAMES.test(text)).toBe(false);
+    expect(/\b(38-55|over 40|midlife|perimenopause)\b/i.test(text)).toBe(false);
+  });
+
+  it("covers all four territories", () => {
+    const text = buildContentTerritoryGuide().join("\n");
+
+    for (const territory of ["T1", "T2", "T3", "T4"]) {
+      expect(text).toContain(territory);
+    }
+  });
+});
+
+describe("idea pool plan rows", () => {
+  const rows = buildIdeaPoolItems();
+  const flat = rows.flat().join(" ");
+
+  it("returns well-formed 6-column rows", () => {
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((row) => row.length === 6)).toBe(true);
+  });
+
+  it("covers all four content territories", () => {
+    for (const label of [
+      "Styling & looks",
+      "Staying chic & self-care",
+      "Product features & craft",
+      "Everyday wearability",
+    ]) {
+      expect(flat).toContain(label);
+    }
+  });
+
+  it("drops the retired motifs", () => {
+    expect(/nancy meyers|chair test|group chat|6 ?pm bra|low-rise jeans/i.test(flat)).toBe(false);
   });
 });

@@ -1605,14 +1605,13 @@ async function buildMonthlyPlan(
         "For analytics-backed follow-ups: repeat the winning format/visual type/behavior from recommendations, but change the theme angle so the content does not feel duplicated.",
         "For inspiration-based posts: adapt the mechanic, hook structure, CTA, offer, or visual system into ILARIA's voice. Do not copy wording, claims, product truth, or brand identity.",
         "Never include competitor names, source brand names, source collection names, source URLs, or source product names in final post fields. Replace source product truth with ILARIA product truth.",
-        "For ILARIA-original posts: fill funnel and pillar gaps: attraction, education, trust, desire, conversion; include fit reassurance, long-wear comfort, size/returns trust, support construction, product-on-body, styling, reviews, and TikTok Shop reassurance.",
-        "Competitor pattern families allowed: Honeylove-like support without squeeze, Leonisa-like real proof, Shapermint-like fit guidance, Yummie-like everyday comfort, Shapellx-like social-commerce demo, Underoutfit-like fit reassurance. SKIMS is style reference only, not a performance benchmark.",
+        "For ILARIA-original posts: spread ideas across the four content territories below and make each one specific, stylish, and desirable.",
         `Plan one content idea per day. Respect the monthly platform focus ${normalizedProfile.monthlyPlatformFocus}; if it is BOTH, publish on TikTok and Instagram at the same time.`,
         "Mix formats: reels, carousels, editorial graphics, product close-up banners, review/proof posts, and collage-style posts.",
         'Each item must be shaped as {"platform":"BOTH","goal":"...","format":"Reel|Carousel|Editorial graphic|Product banner|Collage","theme":"...","angle":"...","visualConcept":"...","tiktokExecution":"...","instagramExecution":"..."}',
         "Mark adapted inspiration ideas inside visualConcept or execution notes with a short phrase like 'Inspiration-based adaptation: ...'. Mark original ILARIA gap-fill ideas with 'ILARIA original gap-fill: ...'.",
-        "The content must feel tasteful, vivid, and desirable for women 38-55: adult-life humor, style, long-day comfort, fit reassurance, and soft sensual modern visuals.",
-        "Use specific hooks like group chat reality, 6 PM bra patience, chair test, low-rise jeans memory, fitted dress base layer, Nancy Meyers morning vs calendar.",
+        "The content must feel tasteful, aspirational, and desirable: good vibes, great mood, real styling, all-day comfort, and a clean modern look. Do NOT target by age and do NOT use body-decline or 'why your body changed' framing.",
+        ...buildContentTerritoryGuide(),
         "Do not use these words or ideas: goddess, sexy, unapologetic confidence, real women real results, empower, transform your body, hide flaws, perfect hourglass.",
         ...buildStyleGuard(),
       ].join("\n"),
@@ -2326,6 +2325,105 @@ function scoreCompetitorPost(post: Pick<CompetitorPost, "views" | "likes" | "com
   return engagement || 1;
 }
 
+// --- Content idea pool (current direction) --------------------------------
+// Replaces the retired hardcoded motif list. Ideas are grounded in the
+// styling / feature / wearability direction (see docs/CONTENT_TOPIC_SYSTEM.md);
+// each carries a content territory + a "technique" tag so the planner can cover
+// all four territories and avoid repeating a device. ILARIA-original and
+// compliant: no age framing, no competitor names, no body-fixing language.
+type ContentTerritory = "T1" | "T2" | "T3" | "T4";
+
+interface SeedIdea {
+  territory: ContentTerritory;
+  topic: string;
+  hookLine: string;
+  format: "Reel" | "Carousel";
+  technique: string;
+  cta: string;
+}
+
+const TERRITORY_LABELS: Record<ContentTerritory, string> = {
+  T1: "Styling & looks",
+  T2: "Staying chic & self-care",
+  T3: "Product features & craft",
+  T4: "Everyday wearability",
+};
+
+const ILARIA_IDEA_POOL: SeedIdea[] = [
+  // T1 — Styling & looks
+  { territory: "T1", topic: "One piece, three ways", hookLine: "One piece, three outfits — same ten minutes to get dressed.", format: "Reel", technique: "one-piece-many-ways", cta: "Save the look you'd wear first." },
+  { territory: "T1", topic: "A pack-light weekend capsule", hookLine: "Everything for three days away, and it all mixes.", format: "Carousel", technique: "travel-capsule", cta: "Save this before you pack." },
+  { territory: "T1", topic: "What to wear under the sheer-skirt look", hookLine: "The sheer-skirt look only works with the right layer underneath.", format: "Carousel", technique: "what-to-wear-under", cta: "Save it for when you try the trend." },
+  { territory: "T1", topic: "Desk to dinner on one base", hookLine: "Same base, two completely different evenings.", format: "Reel", technique: "work-to-night", cta: "Tell us which version you'd wear out." },
+  { territory: "T1", topic: "What actually disappears under white", hookLine: "Under a white outfit, only one base layer truly disappears.", format: "Carousel", technique: "under-white", cta: "Save before your next white outfit." },
+  // T2 — Staying chic & self-care
+  { territory: "T2", topic: "Get ready, the easy version", hookLine: "Getting ready when you actually like getting dressed.", format: "Reel", technique: "grwm", cta: "Tell us your go-to easy outfit." },
+  { territory: "T2", topic: "The base that makes the outfit", hookLine: "The two minutes that make the whole outfit sit right.", format: "Reel", technique: "quick-base", cta: "Save it for slow mornings." },
+  { territory: "T2", topic: "A small good-vibes morning ritual", hookLine: "A calm five minutes before the day starts.", format: "Reel", technique: "self-care-ritual", cta: "Share yours below." },
+  // T3 — Product features & craft
+  { territory: "T3", topic: "The bodysuit detail you'll love", hookLine: "Bodysuit, but the bottom unsnaps — no full undress for the bathroom.", format: "Reel", technique: "feature-unsnap", cta: "Comment if you didn't know these existed." },
+  { territory: "T3", topic: "Straps that don't dig", hookLine: "Wide, cushioned straps — no shoulder dents by 3pm.", format: "Carousel", technique: "feature-straps", cta: "Save for your next everyday piece." },
+  { territory: "T3", topic: "Cushioned inside, smooth outside", hookLine: "Soft where it touches you, invisible under what you wear.", format: "Carousel", technique: "feature-fabric", cta: "Save this one." },
+  { territory: "T3", topic: "No separate bra needed", hookLine: "Built-in support that works solo or layered.", format: "Reel", technique: "feature-double-duty", cta: "Tell us where you'd wear it." },
+  { territory: "T3", topic: "The inserts that do the quiet work", hookLine: "The shaping comes from smart panels, not from squeezing.", format: "Carousel", technique: "feature-inserts", cta: "Save for the details." },
+  // T4 — Everyday wearability
+  { territory: "T4", topic: "On at 8, forgot by noon", hookLine: "On at 8am, forgot about it by noon.", format: "Reel", technique: "all-day-comfort", cta: "Tell us your longest day in it." },
+  { territory: "T4", topic: "Invisible under everything", hookLine: "No lines, even under the clingy dress.", format: "Reel", technique: "invisible-under-clothes", cta: "Save for your next fitted outfit." },
+  { territory: "T4", topic: "On in ten seconds", hookLine: "On in ten seconds, off just as fast.", format: "Reel", technique: "easy-on", cta: "Comment if getting dressed should be this easy." },
+  { territory: "T4", topic: "Works under anything", hookLine: "One base layer, every kind of outfit over it.", format: "Carousel", technique: "wear-under-anything", cta: "Save the combos you'd try." },
+];
+
+function seedIdeaToPlanRow(idea: SeedIdea): string[] {
+  const label = TERRITORY_LABELS[idea.territory];
+  const isCarousel = idea.format === "Carousel";
+  const visualConcept = isCarousel
+    ? `${label}: ${idea.topic}. Saveable multi-slide layout, one clear idea per slide, warm modern styling, good-vibes energy.`
+    : `${label}: ${idea.topic}. Full-bleed styling shot, clear first-frame hook, real and stylish, good-vibes energy.`;
+  const tiktokExecution = isCarousel
+    ? `Swipe-through reel built from the slides; open on the hook: ${idea.hookLine}`
+    : `Open on the hook (${idea.hookLine}); keep it fast, real, and stylish.`;
+  const instagramExecution = isCarousel
+    ? `Carousel-first for saves; final slide CTA: ${idea.cta}`
+    : `Reel with a clean cover line; caption ends on: ${idea.cta}`;
+  return [idea.format, idea.topic, idea.hookLine, visualConcept, tiktokExecution, instagramExecution];
+}
+
+// Orders the pool round-robin across the four territories so a generated plan
+// covers every territory and spaces techniques out (a technique only repeats
+// after the whole pool has been used once).
+export function buildIdeaPoolItems(): string[][] {
+  const territories: ContentTerritory[] = ["T1", "T2", "T3", "T4"];
+  const byTerritory: Record<ContentTerritory, SeedIdea[]> = { T1: [], T2: [], T3: [], T4: [] };
+  for (const idea of ILARIA_IDEA_POOL) {
+    byTerritory[idea.territory].push(idea);
+  }
+  const ordered: SeedIdea[] = [];
+  for (let depth = 0; ordered.length < ILARIA_IDEA_POOL.length; depth += 1) {
+    for (const territory of territories) {
+      const idea = byTerritory[territory][depth];
+      if (idea) {
+        ordered.push(idea);
+      }
+    }
+  }
+  return ordered.map(seedIdeaToPlanRow);
+}
+
+// LLM-prompt guidance for the content direction + four territories + format map.
+// Brand-name-free so the model never echoes a competitor into published copy.
+export function buildContentTerritoryGuide(): string[] {
+  return [
+    "Content direction — aspirational, age-agnostic, good vibes. Show that women look and feel chic at any weight, figure, and age THROUGH styling and product, never through slogans. Do NOT target by age, do NOT explain 'why your body changed', and do NOT use problem/anxiety or body-fixing framing.",
+    "Spread ideas across four content territories:",
+    "- T1 Styling & looks: mix & match, lookbooks, capsule and travel wardrobes, 'what to wear under what'. Strongest angle: the piece that makes an outfit or trend work (e.g. the right layer under a sheer skirt, slip dress, or tee-on-tee).",
+    "- T2 Staying chic & self-care: getting-ready, routines, feeling fabulous — tied to style and feel, not to fixing the body.",
+    "- T3 Product features & craft: name a concrete feature and the benefit it unlocks (wide/cushioned straps, massage pads, bodysuit inserts, a detachable bottom for easy bathroom use, soft fabric, invisible seamless build); show double-duty versatility.",
+    "- T4 Everyday wearability: all-day comfort, easy to put on, invisible under clothing (wearable under any fitted outfit), versatility, easy care.",
+    "Lead hooks with desire and specificity (outcome/showcase, 'what to wear under', feature aha), not problems. Avoid stale generic openers, and never use age or body-decline angles.",
+    "Format to goal: carousels for save-worthy styling/feature/lookbook content; reels for discovery (one-piece-many-looks, get-ready, comfort-in-motion). Put a 'save this' cue on carousels.",
+  ];
+}
+
 function buildPlanFallback(
   profile: NormalizedProfile,
   competitorPatterns: CompetitorPlanPattern[] = [],
@@ -2343,38 +2441,7 @@ function buildPlanFallback(
     `Instagram version: polish the same winning format as a saveable post or cover. Evidence: ${recommendation.evidence}.`,
   ]);
 
-  const ilariaOriginalItems = [
-    ["Reel", "Adult-life microdrama", "The outfit is perfect. The bra situation is not.", "Full-bleed mirror moment: polished outfit, tiny shoulder adjustment, product close-up as the calm fix.", "Open on the line, cut to the outfit almost working, then one close support detail and a dry smile.", "Post as Reel with a clean cover: The outfit is perfect. One detail is not."],
-    ["Carousel", "Fit education", "What your chair knows that your mirror does not.", "Magazine carousel: standing pose, sitting test, waistband/strap close-ups, one rule per slide.", "Turn slide logic into a quick chair-test demo with text overlays.", "Carousel-first with slide 1 as the hook and final slide: Save before you buy."],
-    ["Editorial graphic", "Mature soft confidence", "I said polished. Not compressed.", "Soft sensual product still life on knitwear with one large typographic line.", "Use as 7-second text-led reel with slow fabric movement.", "Static editorial graphic with minimal caption and product tag."],
-    ["Reel", "Real-life comfort proof", "Office at 9. Dinner at 7. Bra patience at 0.", "Day-to-night outfit montage with watch, calendar, bag, and a quiet base-layer reveal.", "Fast cuts through the day; payoff is support that does not add another problem.", "Reel cover uses the timeline line; caption expands the long-wear proof."],
-    ["Collage", "Review and trust proof", "The useful reviews mention time.", "Collage of customer quote, 6 PM timestamp, product detail, and warm dressing-room crop.", "Animate the quote as a TikTok proof card, then show the support detail.", "Feed collage with quote as hero and a small fit note underneath."],
-    ["Reel", "Cultural memory", "Women who survived low-rise jeans deserve peace.", "Nostalgic denim flash, current soft base layer, calm adult outfit finish.", "Open with the low-rise line, then contrast old discomfort with present-day standards.", "Reel with cleaner subtitles; cover leans witty, not product-heavy."],
-    ["Carousel", "Style and base-layer rituals", "What to wear under knitwear, workwear, and fitted tops.", "Three outfit textures, three base-layer solutions, full-bleed crops and simple labels.", "Use as quick outfit-matching reel with three transitions.", "Saveable carousel with one outfit need per slide."],
-    ["Product banner", "Product support explainers", "Support without punishment is a design choice.", "Large product crop with two construction callouts and one warm body crop.", "Show hands pointing to band, straps, smoothing zones; no jargon.", "Product banner with callouts; caption explains why comfort is not an accident."],
-    ["Reel", "Adult-life microdrama", "This looked easier in the group chat.", "Group chat screenshot opener, outfit rail, mirror pause, product as the quiet resolution.", "Use deadpan pacing and one expectation-vs-reality beat.", "Reel cover keeps the group-chat line; caption: Some plans sound simpler in text."],
-    ["Editorial graphic", "Mature soft confidence", "Not every woman wants a makeover. Some want coherence.", "Wardrobe still life: blazer, lipstick, bra strap detail, soft shadow, editorial type.", "Animate as slow text reveal over dressing details.", "Static graphic for Instagram with a thoughtful, minimal caption."],
-    ["Reel", "Fuller-bust support", "If your shoulders are doing all the work, that bra is not helping.", "Shoulder tension gesture, strap adjustment, then band/support close-up.", "Start with the shoulder complaint, then show where support should actually come from.", "Reel with cover: Your shoulders were not hired for all this."],
-    ["Carousel", "Sizing reassurance", "Between sizes? Do not let optimism order the smaller one.", "Playful but elegant sizing carousel with two fit paths and a calm rule.", "Short Marina/founder-style video giving the between-sizes rule.", "Carousel-first; final slide invites Comment FIT."],
-    ["Collage", "TikTok Shop trust", "Shopping online is fun until sizing adds suspense.", "Collage of size chart, exchange cue, product close-up, review note.", "Turn the suspense line into a mini shopping-risk reducer.", "Instagram collage with first exchange/free fit reassurance as proof layer."],
-    ["Reel", "Real-life comfort proof", "Five minutes in the mirror proves very little.", "Mirror try-on, sitting, reaching, walking, end-of-day timestamp.", "Show the real test after the mirror: sit, move, breathe, keep going.", "Reel cover: The mirror is not the whole exam."],
-    ["Product banner", "Invisible under clothes", "Seamless is not a magic word.", "Fabric macro, fitted top crop, line comparison without body negativity.", "Use a quick myth-busting demo: why seamless can still show.", "Banner/carousel hybrid with three reasons and one product note."],
-    ["Reel", "Adult-life microdrama", "Nancy Meyers morning. Actual calendar.", "Soft kitchen/wardrobe fantasy interrupted by phone calendar and practical dressing.", "Open dreamy, then cut to logistics; product appears as the one thing that cooperates.", "Reel with aspirational cover and witty caption."],
-    ["Carousel", "Support levels", "Light, medium, firm: choose by day, not ego.", "Three tactile product/detail panels, each tied to a real-life day.", "Quick try-on explainer with three use cases.", "Saveable carousel; final slide: Start with the day you actually have."],
-    ["Editorial graphic", "Brand philosophy", "Smooth and put-together. Still breathing.", "Elegant type over soft fabric fold and partial body crop.", "Text-led TikTok with slow product motion and one support detail.", "Static editorial post with product tag, very little caption."],
-    ["Reel", "Style and base-layer rituals", "Same outfit. Better base layer.", "Same dress before/after base-layer styling, same body, calmer line.", "Respectful visual proof; avoid transformation language.", "Reel with clean cover; caption anchors the same-body/better-infrastructure idea."],
-    ["Collage", "Comment becomes content", "From comments to closet: four real questions answered.", "Comment bubbles, product crops, quick answers, soft neutral layout.", "Use comment screenshots as the hook and answer each in one beat.", "Carousel/collage with one practical answer per slide."],
-    ["Reel", "Adult social truth", "Everything looks expensive until the bra joins the chat.", "Outfit close-ups, neckline/strap issue, quiet support fix.", "Fast fashion-aware humor; product bridge only at the payoff.", "Reel cover uses the line; Instagram caption stays short and dry."],
-    ["Carousel", "Fit education", "Bra, brief, or bodysuit: where to start.", "Decision-tree carousel with outfit, feeling, support need, product.", "Turn the tree into a quick choose-with-me video.", "Carousel-first for saves; CTA: Save before your first order."],
-    ["Product banner", "Real-life comfort proof", "Good support gets quieter by evening.", "Product on body crop with 9 AM / 6 PM timestamp overlay.", "Time-stamped proof reel: morning, afternoon, evening comfort checks.", "Banner with timestamp proof and customer-style language."],
-    ["Reel", "Mature soft confidence", "Miranda standards. Human shoulders.", "Polished workwear, bag, laptop, shoulder gesture, soft support close-up.", "Open with the line, then show standards meeting wearable comfort.", "Reel with typography-forward cover; caption keeps the wit."],
-    ["Carousel", "Trust proof", "How to shop shapewear online with less risk.", "Checklist carousel: reviews, support level, exchange, fabric, outfit need.", "TikTok version as quick shopping rules with finger-count beats.", "Saveable carousel with first exchange reassurance near the end."],
-    ["Editorial graphic", "Cultural memory", "The body you have now still gets to dress beautifully.", "Warm body crop, refined typography, no before/after, no fixing language.", "Text-led reel with wardrobe movement and a soft product detail.", "Static graphic for emotional resonance; caption keeps it grounded."],
-    ["Reel", "Product support explainers", "If it rolls, digs, or slips, the fit is probably wrong.", "Three fit issues shown as gestures, then calm correction logic.", "Quick diagnostic reel; each issue gets one visual beat.", "Reel with cleaner cover and a saveable caption."],
-    ["Collage", "Color/product desire", "Apparently, you had opinions about this color.", "Restock/color drama collage with comments, shade close-up, packing moment.", "BTS TikTok: color close-up, packing, comment overlay, low-pressure CTA.", "Instagram collage/banner; caption builds small product desire."],
-    ["Carousel", "Fuller-bust support", "Support should not delegate the whole job to your shoulders.", "Education carousel with strap vs band logic and comfort cues.", "Marina/founder-guide style short explainer.", "Carousel with one diagram-like slide and one real-life proof slide."],
-    ["Reel", "Hot reassurance", "The first exchange matters because bodies are not spreadsheets.", "Online order, size doubt, package, calm exchange reassurance.", "Use the line as hook, then explain first exchange without sounding corporate.", "Reel or graphic banner with trust-first caption and soft CTA."],
-  ];
+  const ilariaOriginalItems = buildIdeaPoolItems();
 
   const competitorItems = competitorPatterns.slice(0, Math.ceil(targetCount * 0.6)).map((pattern, index) => [
     normalizeCompetitorFormat(pattern.format, index),
