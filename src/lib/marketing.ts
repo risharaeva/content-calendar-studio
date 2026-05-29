@@ -560,7 +560,10 @@ export async function getDashboardState(projectId = DEFAULT_PROJECT_ID): Promise
   };
 }
 
-export async function generateMonthlyPlan(projectId = DEFAULT_PROJECT_ID) {
+export async function generateMonthlyPlan(
+  projectId = DEFAULT_PROJECT_ID,
+  mode: "recreate" | "complete" = "recreate",
+) {
   await ensureProjectData(projectId);
 
   const thirtyDaysAgo = subDays(new Date(), 30);
@@ -618,7 +621,32 @@ export async function generateMonthlyPlan(projectId = DEFAULT_PROJECT_ID) {
     },
   });
   const anchoredPosts = buildPlanEventPosts(planEvents, planningPeriod, profile);
-  const fillPostCount = Math.max(targetPostCount - anchoredPosts.length, 0);
+
+  const existingPosts = await prisma.contentPost.findMany({
+    where: {
+      projectId,
+    },
+  });
+
+  const dayKey = (date: Date) => startOfDay(date).getTime();
+  const periodStart = dayKey(planningPeriod.startDate);
+  const periodEnd = dayKey(planningPeriod.endDate);
+  const inPeriod = (date: Date) => {
+    const day = dayKey(date);
+    return day >= periodStart && day <= periodEnd;
+  };
+
+  // "complete" keeps the existing in-period posts and only fills the empty dates
+  // around them (top up after the user deletes the ideas they dislike). "recreate"
+  // ignores them and rebuilds the whole period from scratch. Inputs-anchored dates
+  // are always (re)built in both modes. Posts dated OUTSIDE the period are left as
+  // history either way.
+  const keptExistingPosts = mode === "complete" ? existingPosts.filter((post) => inPeriod(post.plannedDate)) : [];
+  const occupiedDates = [
+    ...anchoredPosts.map((post) => post.plannedDate),
+    ...keptExistingPosts.map((post) => post.plannedDate),
+  ];
+  const fillPostCount = Math.max(targetPostCount - occupiedDates.length, 0);
   const planItems = fillPostCount > 0
     ? await buildMonthlyPlan(
         profile,
@@ -633,14 +661,8 @@ export async function generateMonthlyPlan(projectId = DEFAULT_PROJECT_ID) {
     planningPeriod.startDate,
     planningPeriod.endDate,
     fillPostCount,
-    anchoredPosts.map((post) => post.plannedDate),
+    occupiedDates,
   );
-
-  const existingPosts = await prisma.contentPost.findMany({
-    where: {
-      projectId,
-    },
-  });
 
   const datedPlanItems: DatedPlanItem[] = [
     ...anchoredPosts,
@@ -650,18 +672,17 @@ export async function generateMonthlyPlan(projectId = DEFAULT_PROJECT_ID) {
     })),
   ].toSorted((left, right) => left.plannedDate.getTime() - right.plannedDate.getTime());
 
-  // Recreate Plan rebuilds the SELECTED PERIOD every time, regardless of a post's
-  // status or review — statuses are just labels for the user, not a lock. Posts
-  // dated OUTSIDE the period are left untouched as history. We also clear any post
-  // sitting on a date we are about to (re)create — including Inputs-anchored dates
-  // that can fall just before the period start — so regeneration leaves no duplicate.
-  const periodStart = startOfDay(planningPeriod.startDate).getTime();
-  const periodEnd = startOfDay(planningPeriod.endDate).getTime();
-  const targetDateKeys = new Set(datedPlanItems.map((item) => startOfDay(item.plannedDate).getTime()));
+  const targetDateKeys = new Set(datedPlanItems.map((item) => dayKey(item.plannedDate)));
   const replaceablePostIds = existingPosts
     .filter((post) => {
-      const day = startOfDay(post.plannedDate).getTime();
-      return (day >= periodStart && day <= periodEnd) || targetDateKeys.has(day);
+      const day = dayKey(post.plannedDate);
+      // Always clear a post sitting on a date we are about to (re)create (e.g. an
+      // anchored date) so regeneration leaves no duplicate. In "recreate" also clear
+      // the whole period; in "complete" every other existing post is kept.
+      if (targetDateKeys.has(day)) {
+        return true;
+      }
+      return mode === "recreate" && day >= periodStart && day <= periodEnd;
     })
     .map((post) => post.id);
 

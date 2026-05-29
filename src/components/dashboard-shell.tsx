@@ -551,13 +551,27 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                 onClick={() =>
                   runDashboardAction(
                     projectUrl("/api/plan/generate-month"),
-                    "Plan regenerated from date rules, analytics, inspiration, and saved inputs.",
-                    "Generating plan from date rules, analytics, inspiration, and saved inputs...",
-                    { savePlanningInputsFirst: true },
+                    "Plan rebuilt for the selected period.",
+                    "Rebuilding the whole plan for the period...",
+                    { savePlanningInputsFirst: true, body: { mode: "recreate" } },
                   )
                 }
               >
                 {busyAction?.includes("/api/plan/generate-month") ? "Generating..." : "Recreate plan"}
+              </ActionButton>
+              <ActionButton
+                disabled={isBusy}
+                tone="secondary"
+                onClick={() =>
+                  runDashboardAction(
+                    projectUrl("/api/plan/generate-month"),
+                    "Empty dates filled with fresh ideas.",
+                    "Filling the empty dates in the period...",
+                    { savePlanningInputsFirst: true, body: { mode: "complete" } },
+                  )
+                }
+              >
+                Complete plan
               </ActionButton>
             </div>
           </div>
