@@ -481,6 +481,18 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
     }
   }
 
+  async function handleDeletePost(postId: string) {
+    if (typeof window !== "undefined" && !window.confirm("Delete this post? This also removes its packet, images, and review.")) {
+      return;
+    }
+    try {
+      const next = await callJson<DashboardState>(`/api/posts/${postId}`, { method: "DELETE" });
+      syncDashboard(next, "Post deleted.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Delete failed.");
+    }
+  }
+
   async function handleCompetitorPostSubmit(formData: FormData) {
     const payload = {
       sourceType: String(formData.get("sourceType") ?? "COMPETITOR"),
@@ -545,7 +557,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                   )
                 }
               >
-                {busyAction?.includes("/api/plan/generate-month") ? "Generating..." : "Create plan"}
+                {busyAction?.includes("/api/plan/generate-month") ? "Generating..." : "Recreate plan"}
               </ActionButton>
             </div>
           </div>
@@ -881,9 +893,19 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                       <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">{labelPlatform(selectedPost.platform)}</p>
                       <p className="text-lg font-semibold tracking-[-0.03em] text-slate-950">{selectedPost.format} · {selectedPost.goal}</p>
                     </div>
-                    <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
-                      {format(new Date(selectedPost.plannedDate), "MMM d")}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
+                        {format(new Date(selectedPost.plannedDate), "MMM d")}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => startTransition(() => void handleDeletePost(selectedPost.id))}
+                        className="rounded-[10px] border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 transition hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                   <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
                     Status

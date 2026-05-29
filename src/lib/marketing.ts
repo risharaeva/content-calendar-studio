@@ -640,12 +640,8 @@ export async function generateMonthlyPlan(projectId = DEFAULT_PROJECT_ID) {
     where: {
       projectId,
     },
-    include: {
-      review: true,
-    },
   });
 
-  const replaceablePostIds = existingPosts.filter((post) => !post.review).map((post) => post.id);
   const datedPlanItems: DatedPlanItem[] = [
     ...anchoredPosts,
     ...dates.map((date, index) => ({
@@ -654,31 +650,34 @@ export async function generateMonthlyPlan(projectId = DEFAULT_PROJECT_ID) {
     })),
   ].toSorted((left, right) => left.plannedDate.getTime() - right.plannedDate.getTime());
 
-  const nextPosts = datedPlanItems.flatMap((item) => {
-    const hasReviewedPost = existingPosts.some(
-      (post) =>
-        post.review &&
-        startOfDay(post.plannedDate).getTime() === startOfDay(item.plannedDate).getTime(),
-    );
+  // Recreate Plan rebuilds the SELECTED PERIOD every time, regardless of a post's
+  // status or review — statuses are just labels for the user, not a lock. Posts
+  // dated OUTSIDE the period are left untouched as history. We also clear any post
+  // sitting on a date we are about to (re)create — including Inputs-anchored dates
+  // that can fall just before the period start — so regeneration leaves no duplicate.
+  const periodStart = startOfDay(planningPeriod.startDate).getTime();
+  const periodEnd = startOfDay(planningPeriod.endDate).getTime();
+  const targetDateKeys = new Set(datedPlanItems.map((item) => startOfDay(item.plannedDate).getTime()));
+  const replaceablePostIds = existingPosts
+    .filter((post) => {
+      const day = startOfDay(post.plannedDate).getTime();
+      return (day >= periodStart && day <= periodEnd) || targetDateKeys.has(day);
+    })
+    .map((post) => post.id);
 
-    if (hasReviewedPost) {
-      return [];
-    }
-
-    return [{
-      projectId,
-      plannedDate: item.plannedDate,
-      platform: item.platform,
-      goal: item.goal,
-      format: item.format,
-      theme: item.theme,
-      angle: item.angle,
-      visualConcept: item.visualConcept,
-      tiktokExecution: item.tiktokExecution,
-      instagramExecution: item.instagramExecution,
-      status: PostStatus.PLANNED,
-    }];
-  });
+  const nextPosts = datedPlanItems.map((item) => ({
+    projectId,
+    plannedDate: item.plannedDate,
+    platform: item.platform,
+    goal: item.goal,
+    format: item.format,
+    theme: item.theme,
+    angle: item.angle,
+    visualConcept: item.visualConcept,
+    tiktokExecution: item.tiktokExecution,
+    instagramExecution: item.instagramExecution,
+    status: PostStatus.PLANNED,
+  }));
 
   await prisma.$transaction([
     prisma.generatedImage.deleteMany({
@@ -765,6 +764,25 @@ export async function updatePostIdea(postId: string, input: PostIdeaInput) {
         imageReferenceIds: JSON.stringify(input.imageReferenceIds),
       },
     });
+  });
+
+  return getDashboardState(post.projectId);
+}
+
+export async function deletePost(postId: string) {
+  const post = await prisma.contentPost.findUnique({
+    where: { id: postId },
+    select: { projectId: true },
+  });
+
+  if (!post) {
+    throw new Error("Post not found.");
+  }
+
+  // CampaignPacket, GeneratedImage, and ReviewResult cascade on delete (schema),
+  // so removing the post cleans up its packet, images, and review automatically.
+  await prisma.contentPost.delete({
+    where: { id: postId },
   });
 
   return getDashboardState(post.projectId);
