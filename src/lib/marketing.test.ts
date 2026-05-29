@@ -5,6 +5,7 @@ import {
   buildCompetitorMechanicsGuide,
   buildCtaFallbacks,
   buildHookFallbacks,
+  buildStyleGuard,
   detectPostIntent,
   distributePostDates,
 } from "@/lib/marketing";
@@ -105,5 +106,19 @@ describe("competitor mechanics guide", () => {
     const text = buildCompetitorMechanicsGuide().join("\n").toLowerCase();
 
     expect(text).toContain("hard avoids");
+  });
+});
+
+describe("style guard", () => {
+  it("bans common AI-cliche buzzwords", () => {
+    const text = buildStyleGuard().join("\n").toLowerCase();
+
+    expect(text).toContain("elevate");
+    expect(text).toContain("game-changer");
+    expect(text).toContain("banned");
+  });
+
+  it("never names a competitor brand", () => {
+    expect(COMPETITOR_NAMES.test(buildStyleGuard().join("\n"))).toBe(false);
   });
 });

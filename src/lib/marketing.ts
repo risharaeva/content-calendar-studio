@@ -1614,6 +1614,7 @@ async function buildMonthlyPlan(
         "The content must feel tasteful, vivid, and desirable for women 38-55: adult-life humor, style, long-day comfort, fit reassurance, and soft sensual modern visuals.",
         "Use specific hooks like group chat reality, 6 PM bra patience, chair test, low-rise jeans memory, fitted dress base layer, Nancy Meyers morning vs calendar.",
         "Do not use these words or ideas: goddess, sexy, unapologetic confidence, real women real results, empower, transform your body, hide flaws, perfect hourglass.",
+        ...buildStyleGuard(),
       ].join("\n"),
     });
 
@@ -1732,6 +1733,7 @@ async function buildPacket(
         `Caption inspiration patterns to adapt, not copy: ${captionStyleGuide || "none captured yet"}`,
         'Return one object with keys objective, coreAngle, hookVariants (3 strings), captionVariants (2 strings), ctaVariants (2 strings), hashtagSet (8 strings), visualBrief, imagePromptVariants (2 strings), reviewChecklist (3 strings).',
         ...buildCompetitorMechanicsGuide(),
+        ...buildStyleGuard(),
         ...postTypeInstructions,
         typeSpecificKey,
         "When a product is named above, make the copy, scenes/slides/banner, and every image prompt specifically about THAT product (its fit promise, needs, and construction). Do not drift to a different garment.",
@@ -1810,6 +1812,7 @@ async function buildRecommendations(
         'Return exactly 3 items shaped as {"theme":"...","goal":"...","platform":"INSTAGRAM"|"TIKTOK","reason":"...","suggestedNextAngle":"...","evidence":{"medianScore":number,"wins":[string],"basedOnPosts":number}}',
         "Explain what worked, including whether video, carousel, banner, collage, person/product-on-body, or graphic/text-led content performed best.",
         "Each recommendation should say which format to use more often and what to apply to the next posts.",
+        ...buildStyleGuard(),
       ].join("\n"),
     });
 
@@ -1985,6 +1988,26 @@ export function buildCompetitorMechanicsGuide(): string[] {
     "- Number then claim then reassurance, but ONLY with real, verifiable numbers; never invent reviews, ratings, or return windows.",
     "- Expert-explainer cadence: teach the WHY behind a fit, then present the product as the answer.",
     "Hard avoids: no body-shaming or 'hide flaws'; no 'transform your body' or 'flawless'; no generic empowerment ('discover comfort', 'feel confident', 'embrace your curves', 'designed for every body', 'goddess', 'unapologetic'); no unsupported claims ('science-backed', 'clinically proven', '#1'); no fabricated testimonials or numbers; never put a competitor or other brand name in copy or hashtags.",
+  ];
+}
+
+// Provider-agnostic style guard injected into every text prompt (plan, copy,
+// insights). It pushes output away from formulaic "AI voice" clichés toward the
+// brand's restrained, specific, human register — closer to the calmer, more
+// concrete tone the owner prefers. Plain prompt text, so it works identically on
+// OpenAI, Anthropic, and Ollama.
+export function buildStyleGuard(): string[] {
+  return [
+    "Writing style — sound like a specific, calm human who knows the product, not an AI assistant or a brand bot:",
+    "- Be concrete and specific. One real, observed detail beats three adjectives.",
+    "- Vary sentence length and rhythm; short fragments are fine. Do not make every line the same shape.",
+    "- Do NOT use rule-of-three lists as a default crutch.",
+    "Banned AI-cliche openers and transitions: 'In today's world', 'In a world where', 'Let's face it', 'Picture this', 'Imagine', 'Let's dive in', 'When it comes to', 'At the end of the day', 'That said', 'Moreover', 'Furthermore', 'Here's the thing', 'Remember:', 'Pro tip:', 'The bottom line', 'In conclusion'.",
+    "Banned hype verbs and buzzwords: 'elevate', 'unlock', 'unleash', 'revolutionize', 'supercharge', 'game-changer', 'level up', 'next-level', 'effortless', 'curated', 'must-have'.",
+    "Banned constructions: \"It's not just X, it's Y\"; \"X isn't just about Y\"; \"Whether you're ___ or ___\"; \"Say goodbye to ___\"; filler rhetorical-question openers.",
+    "Banned empty intensifiers: 'truly', 'absolutely', 'definitely', 'incredibly', 'seriously', 'literally'.",
+    "Do not overuse em dashes, do not stuff emojis, and do not restate the brief or hedge ('it's worth noting', 'as you may know').",
+    "If a line could appear in any brand's caption, rewrite it so it could only be ours.",
   ];
 }
 

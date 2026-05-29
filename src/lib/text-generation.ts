@@ -12,24 +12,70 @@ interface TextRoute {
 }
 
 export function getTextRoute(settings: AppSettings, task: TextTask): TextRoute {
-  if (task === "copy") {
-    return {
-      provider: normalizeProvider(settings.copyTextProvider),
-      model: settings.copyTextModel,
-    };
+  const dbProvider =
+    task === "copy"
+      ? settings.copyTextProvider
+      : task === "insights"
+        ? settings.insightsProvider
+        : settings.planTextProvider;
+  const dbModel =
+    task === "copy"
+      ? settings.copyTextModel
+      : task === "insights"
+        ? settings.insightsModel
+        : settings.planTextModel;
+
+  return resolveTextRoute(dbProvider, dbModel, settings.ollamaModel);
+}
+
+// Resolves the effective text provider/model. Priority:
+//   1. TEXT_PROVIDER / TEXT_MODEL env vars — explicit override, no UI or DB write.
+//   2. The per-task provider saved in settings, when it names a hosted provider.
+//   3. If settings still say OLLAMA (the default) but an OPENAI_API_KEY is present,
+//      prefer OpenAI so hosted deploys (e.g. Vercel) generate real copy instead of
+//      failing to reach a local-only Ollama and silently falling back to templates.
+//   4. Otherwise Ollama (local dev with no hosted key).
+// The Advanced settings UI that used to edit these was intentionally removed, so
+// env vars + this key-aware default are how the provider is selected now.
+function resolveTextRoute(dbProvider: string, dbModel: string, ollamaModel: string): TextRoute {
+  const envProvider = normalizeProviderOrNull(process.env.TEXT_PROVIDER);
+  const envModel = process.env.TEXT_MODEL?.trim() || "";
+
+  if (envProvider) {
+    return { provider: envProvider, model: envModel || defaultModelFor(envProvider, dbModel, ollamaModel) };
   }
 
-  if (task === "insights") {
-    return {
-      provider: normalizeProvider(settings.insightsProvider),
-      model: settings.insightsModel,
-    };
+  const provider = normalizeProvider(dbProvider);
+  if (provider !== "OLLAMA") {
+    return { provider, model: dbModel || defaultModelFor(provider, dbModel, ollamaModel) };
   }
 
-  return {
-    provider: normalizeProvider(settings.planTextProvider),
-    model: settings.planTextModel,
-  };
+  if (process.env.OPENAI_API_KEY) {
+    return { provider: "OPENAI", model: envModel || "gpt-4o-mini" };
+  }
+
+  return { provider: "OLLAMA", model: dbModel || ollamaModel };
+}
+
+function defaultModelFor(provider: TextProvider, dbModel: string, ollamaModel: string): string {
+  if (provider === "OPENAI") {
+    return "gpt-4o-mini";
+  }
+  if (provider === "ANTHROPIC") {
+    return dbModel || "claude-3-5-haiku-latest";
+  }
+  return dbModel || ollamaModel || "llama3.1:8b";
+}
+
+function normalizeProviderOrNull(value: string | undefined): TextProvider | null {
+  if (!value) {
+    return null;
+  }
+  const upper = value.trim().toUpperCase();
+  if (upper === "OPENAI" || upper === "ANTHROPIC" || upper === "OLLAMA") {
+    return upper;
+  }
+  return null;
 }
 
 export async function generateJsonWithTextRoute<T>({
@@ -71,6 +117,21 @@ export function isProviderConfigured(provider: string) {
   return true;
 }
 
+// Sampling temperature applied to hosted providers. Set deliberately high so the
+// copy reads varied and human instead of falling into the model's most-likely
+// (most generic) phrasing. The anti-cliché style guard in the prompt does the
+// heavy lifting; this just widens the lane.
+const TEXT_TEMPERATURE = 0.85;
+
+// Some OpenAI models (the reasoning o-series and similar) reject any temperature
+// other than the default and 400 on it. Detect that specific failure so we can
+// transparently retry without the param instead of silently falling back to the
+// deterministic local strategy.
+function isUnsupportedTemperatureError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /temperature/i.test(message) && /(unsupported|not supported|does not support|only the default|must be)/i.test(message);
+}
+
 async function generateJsonFromOpenAI<T>(model: string, prompt: string) {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -79,10 +140,17 @@ async function generateJsonFromOpenAI<T>(model: string, prompt: string) {
   }
 
   const client = new OpenAI({ apiKey });
-  const response = await client.responses.create({
-    model,
-    input: `${prompt}\n\nReturn valid JSON only. No markdown.`,
-  });
+  const input = `${prompt}\n\nReturn valid JSON only. No markdown.`;
+
+  let response;
+  try {
+    response = await client.responses.create({ model, input, temperature: TEXT_TEMPERATURE });
+  } catch (error) {
+    if (!isUnsupportedTemperatureError(error)) {
+      throw error;
+    }
+    response = await client.responses.create({ model, input });
+  }
 
   const outputText = response.output_text;
 
@@ -104,6 +172,7 @@ async function generateJsonFromAnthropic<T>(model: string, prompt: string) {
   const response = await client.messages.create({
     model,
     max_tokens: 4096,
+    temperature: TEXT_TEMPERATURE,
     messages: [
       {
         role: "user",
