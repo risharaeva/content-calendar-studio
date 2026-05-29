@@ -1731,7 +1731,7 @@ async function buildPacket(
         `Layout reference notes: ${normalizedProfile.layoutReferenceNotes}`,
         `Caption inspiration patterns to adapt, not copy: ${captionStyleGuide || "none captured yet"}`,
         'Return one object with keys objective, coreAngle, hookVariants (3 strings), captionVariants (2 strings), ctaVariants (2 strings), hashtagSet (8 strings), visualBrief, imagePromptVariants (2 strings), reviewChecklist (3 strings).',
-        ...buildCompetitorMechanicsGuide(),
+        ...buildCopyMechanicsGuide(),
         ...buildStyleGuard(),
         ...postTypeInstructions,
         typeSpecificKey,
@@ -1926,67 +1926,57 @@ function buildCaptionStyleGuide(patterns: CompetitorPlanPattern[]) {
 }
 
 export type PostIntent =
-  | "sizing"
-  | "fit-education"
-  | "support-explainer"
-  | "comfort-proof"
-  | "offer"
+  | "styling"
+  | "self-care"
+  | "feature"
+  | "wearability"
   | "general";
 
-// Lightweight intent detection from the planned post's own fields. Used to make
-// deterministic fallbacks (hooks/CTAs) match the post's actual job instead of
-// emitting the same generic two lines for every post.
+// Lightweight territory detection from the planned post's own fields. Used to make
+// deterministic fallbacks (hooks/CTAs) match the post's content territory instead
+// of emitting the same generic two lines for every post.
 export function detectPostIntent(post: ContentPost): PostIntent {
   const text =
     `${post.theme} ${post.angle} ${post.goal} ${post.format} ${post.visualConcept} ${post.tiktokExecution} ${post.instagramExecution}`.toLowerCase();
 
-  if (/\b(offer|sale|discount|exchange|returns?|free shipping|deal|promo|bundle|installment)\b/.test(text)) {
-    return "offer";
+  if (/\b(get ready|getting ready|grwm|routine|ritual|self-?care|morning)\b/.test(text)) {
+    return "self-care";
   }
-  if (/\b(size|sizing|true to size|measure|measurement|band size|between sizes|cup size)\b/.test(text)) {
-    return "sizing";
+  if (/\b(strap|straps|pad|pads|insert|inserts|unsnap|detachable|seamless|seam|fabric|panel|panels|material|no bra|bra needed|construction)\b/.test(text)) {
+    return "feature";
   }
-  if (/\b(support|construction|fabric|underwire|wireless|breakdown|material|holds|how it'?s made)\b/.test(text)) {
-    return "support-explainer";
+  if (/\b(all[- ]day|invisible|no lines|under clothes|under your clothes|under anything|easy to put on|on in|forget|works under)\b/.test(text)) {
+    return "wearability";
   }
-  if (/\b(all[- ]day|12[- ]hour|wear test|real day|hour 11|hours|honest review|review|proof)\b/.test(text)) {
-    return "comfort-proof";
-  }
-  if (/\b(fit|education|guide|how to|tips|learn|explain|teach)\b/.test(text)) {
-    return "fit-education";
+  if (/\b(style|styling|outfit|outfits|look|looks|capsule|wardrobe|pair|pairing|layer|layers|mix|lookbook|what to wear|wear under)\b/.test(text)) {
+    return "styling";
   }
   return "general";
 }
 
-// Reusable competitor TEXT mechanics distilled from docs/COMPETITOR_TEXT_ANALYSIS.md.
-// These are STRUCTURES, not competitor wording — and they ship in every packet
-// prompt so generation stays specific and current even when no competitor rows
-// exist in the database (the captionStyleGuide path only fires when such rows are
-// present). Deliberately contains NO competitor brand names so the model can never
-// echo one into published copy.
-export function buildCompetitorMechanicsGuide(): string[] {
+// Copy-level direction guide distilled from docs/CONTENT_TOPIC_SYSTEM.md and
+// docs/COMPETITOR_TEXT_ANALYSIS.md. STRUCTURES, not competitor wording — shipped in
+// every packet prompt so single-post copy stays on the styling / feature /
+// wearability direction even with no competitor rows in the database. Contains NO
+// competitor brand names so the model can never echo one into published copy.
+export function buildCopyMechanicsGuide(): string[] {
   return [
-    "Write like current, specific shapewear/intimates social copy — not generic brand filler. Adapt the SHAPE of these proven mechanics, never copy any brand's wording, and never name another brand:",
-    "Hook shapes to pull from:",
-    "- Promise + the named downside you remove (support without the squeeze, pinch, or roll-down).",
-    "- Honest expectation: shaping supports and accentuates; it does not 'transform' the body.",
-    "- Mistake-callout that teaches (the most common sizing mistake and why it backfires).",
-    "- Forget-it's-there wearability (all-day, a full 12-hour day, you stop noticing it).",
-    "- Fabric/feature-first: lead with one real, concrete material or construction property.",
-    "- Risk-removal: try at home, free exchanges, easy returns — to cut purchase anxiety.",
-    "- Spec-as-caption: name the exact piece and the size shown as a fit reference.",
-    "CTA rules:",
-    "- Prefer specific product/action CTAs over generic 'shop now' (for example 'See how we size this' or 'Find your band size').",
-    "- Use a fit-help comment CTA where natural ('Ask your fit question below — we answer every one').",
-    "- For offers, use risk-removal CTAs ('Try it at home, keep what works'), not pressure.",
-    "Offer rules — calm and honest only:",
-    "- Allowed: free exchanges, a clear return window, a factual free-shipping threshold, installments.",
-    "- Forbidden: fake urgency, countdowns, 'only a few left', implausible percent-off, manufactured deadlines.",
-    "Proof rhythm:",
-    "- Negation stacking in ILARIA's own words (no digging, no riding up, no all-day adjusting).",
-    "- Number then claim then reassurance, but ONLY with real, verifiable numbers; never invent reviews, ratings, or return windows.",
-    "- Expert-explainer cadence: teach the WHY behind a fit, then present the product as the answer.",
-    "Hard avoids: no body-shaming or 'hide flaws'; no 'transform your body' or 'flawless'; no generic empowerment ('discover comfort', 'feel confident', 'embrace your curves', 'designed for every body', 'goddess', 'unapologetic'); no unsupported claims ('science-backed', 'clinically proven', '#1'); no fabricated testimonials or numbers; never put a competitor or other brand name in copy or hashtags.",
+    "Write this post's copy like current, aspirational styling/intimates content — desire and good vibes, never problems or age. Adapt the SHAPE of these mechanics, never copy any brand's wording, and never name another brand:",
+    "Hook shapes (lead with desire and specificity, not problems):",
+    "- Outcome / showcase: show the look or feature paying off ('one piece, three outfits').",
+    "- What-to-wear-under: position the piece as the thing that makes an outfit or trend work.",
+    "- Feature aha: reveal a concrete feature as a delightful surprise (wide/cushioned straps, a detachable bottom, soft inner pads, invisible seamless build) and the benefit it unlocks.",
+    "- Wearability-as-desire: all-day comfort, easy to put on, invisible under clothes, works under anything.",
+    "- Specific and concrete: one real detail beats three adjectives; no vague curiosity gaps.",
+    "Caption rules:",
+    "- Sound social-native and human; tie any 'feel great' to STYLE and FEEL, not to fixing the body.",
+    "- Show that women look great at any weight, figure, and age THROUGH styling and product, never through slogans.",
+    "CTA rules (calm; treat as test hypotheses):",
+    "- Prefer specific, low-pressure CTAs ('save this look', 'save before you pack', 'tell us which you'd wear').",
+    "- Inviting a real reply in comments is the safest engagement cue ('ask your styling question below').",
+    "- No fake urgency, countdowns, 'only a few left', or manufactured deadlines.",
+    "Format to goal: carousels for save-worthy styling/feature/lookbook copy; reels for discovery.",
+    "Hard avoids: no age-targeting or 'why your body changed'; no body-shaming or 'hide flaws'; no 'transform your body', 'flawless', or 'snatched'; no before/after slimming; no generic empowerment ('discover comfort', 'feel confident', 'embrace your curves', 'designed for every body', 'goddess', 'unapologetic'); no unsupported 'science-backed'/'clinically proven' claims; no fabricated proof; never name a competitor or other brand.",
   ];
 }
 
@@ -2015,40 +2005,36 @@ function postPieceLabel(post: ContentPost): string {
   return product?.name ?? "this piece";
 }
 
-// Intent-aware deterministic hooks, shaped by the competitor mechanics above. The
-// first hook is always the planner's own angle (the most post-specific line);
-// the other two adapt a mechanic that matches the post's detected intent.
+// Territory-aware deterministic hooks, shaped by the copy-direction guide. The
+// first hook is always the planner's own angle (the most post-specific line); the
+// other two adapt a desire/showcase trigger that matches the post's territory.
 export function buildHookFallbacks(post: ContentPost): string[] {
   const lowerTheme = post.theme.toLowerCase();
   const piece = postPieceLabel(post);
   const lead = post.angle?.trim()
     ? post.angle.trim()
-    : `The small ${lowerTheme} detail that changes the whole day.`;
+    : `The ${lowerTheme} detail that just goes with everything.`;
 
   const byIntent: Record<PostIntent, [string, string]> = {
-    sizing: [
-      "The most common sizing mistake: sizing down for more support. Here's why it backfires.",
-      "Between two sizes? Start with the band — it should feel snug on the loosest hook.",
+    styling: [
+      "Same piece, a completely different outfit.",
+      "The layer that quietly makes the whole look work.",
     ],
-    "fit-education": [
-      "Here's what 'support' should actually feel like in a bra — and what it shouldn't.",
-      "If your band rides up by lunchtime, it's the fit, not you. Here's why.",
+    "self-care": [
+      "Getting ready when you actually like getting dressed.",
+      "The two minutes that make the outfit sit right.",
     ],
-    "support-explainer": [
-      `Support without the squeeze — here's how the ${piece} does it.`,
-      "Hold and lift without all-day pressure. Here's what's actually doing the work.",
+    feature: [
+      `The detail you'll notice first about ${piece}.`,
+      "A small feature, and it earns its place all day.",
     ],
-    "comfort-proof": [
-      "Worn for a full day — here's what it actually felt like by hour 11.",
-      "No digging. No riding up. No counting the minutes until I could take it off.",
-    ],
-    offer: [
-      "Try it at home — if the fit isn't right, the exchange is on us.",
-      "Worth it when it solves a real getting-dressed problem, not because a banner shouted.",
+    wearability: [
+      "On in the morning, forgotten by noon.",
+      "Invisible under everything — even the fitted stuff.",
     ],
     general: [
-      "Support should make the outfit easier, not louder.",
-      `The small ${lowerTheme} detail that changes the whole day.`,
+      "A piece you'll actually reach for.",
+      `The ${lowerTheme} detail that just goes with everything.`,
     ],
   };
 
@@ -2056,33 +2042,29 @@ export function buildHookFallbacks(post: ContentPost): string[] {
   return [lead, second, third];
 }
 
-// Intent-aware deterministic CTAs, shaped by the competitor CTA mechanics above
-// (product/action-specific, fit-help, and risk-removal cues — never pressure).
+// Territory-aware deterministic CTAs, shaped by the copy-direction guide — calm,
+// low-pressure save / tell-us / comment cues (treated as test hypotheses).
 export function buildCtaFallbacks(post: ContentPost): string[] {
   const byIntent: Record<PostIntent, [string, string]> = {
-    sizing: [
-      "Find your size in 30 seconds.",
-      "Between sizes? Comment your measurements — we'll help you choose.",
+    styling: [
+      "Save the look you'd wear first.",
+      "Tell us which version you'd style.",
     ],
-    "fit-education": [
-      "See how we size this.",
-      "Ask your fit question below — we answer every one.",
+    "self-care": [
+      "Save it for a slow morning.",
+      "Share your easy go-to below.",
     ],
-    "support-explainer": [
-      "See the full breakdown of how it's built.",
-      "Questions about the support? Ask below.",
+    feature: [
+      "Comment if you didn't know these existed.",
+      "Save this one for the details.",
     ],
-    "comfort-proof": [
-      "Save this for your next all-day outfit.",
-      "Share your honest first-week notes with us.",
-    ],
-    offer: [
-      "Try it at home — keep what works.",
-      "Free exchanges if the fit isn't right — start with your usual size.",
+    wearability: [
+      "Save it for your next fitted outfit.",
+      "Tell us your longest day in it.",
     ],
     general: [
-      "Save this before your next outfit decision.",
-      "Comment FIT and we'll help you choose your size.",
+      "Save this for later.",
+      "Ask your styling question below — we answer each one.",
     ],
   };
 
@@ -2099,51 +2081,47 @@ function buildCaptionFallbacks(
   const ctaCue = sanitizeInspirationText(captionPatterns.find((pattern) => pattern.cta.trim())?.cta.trim() ?? "");
   const offerCue = sanitizeInspirationText(captionPatterns.find((pattern) => pattern.offer.trim())?.offer.trim() ?? "");
   const inspirationHook = findUsefulInspirationHook(captionPatterns);
-  const firstCta = ctaCue || "Save this before your next outfit decision.";
+  const firstCta = ctaCue || "Save this for your next outfit.";
   const secondCta = post.postType === "CAROUSEL"
-    ? "Swipe through it now, save it for the fitting-room moment later."
-    : "Save it for the next morning when the outfit is right and the base layer is negotiating.";
+    ? "Swipe through, then save it for when you're getting dressed."
+    : "Save it for the next time you're putting an outfit together.";
 
   if (post.postType === "CAROUSEL") {
     return [
-      `${lead}\n\n${proofLine}\n\nThe useful part is not the theory. It is knowing what to check before you order.\n\n${firstCta}`,
-      `${inspirationHook ? `${normalizeCaptionSentence(inspirationHook)}\n\n` : ""}${post.theme} should be practical enough to save, not vague enough to scroll past.\n\nStart with the day you actually have, then choose the support level around that.\n\n${secondCta}`,
+      `${lead}\n\n${proofLine}\n\nThe useful part is the styling, not the theory — here's how it actually comes together.\n\n${firstCta}`,
+      `${inspirationHook ? `${normalizeCaptionSentence(inspirationHook)}\n\n` : ""}${post.theme} is worth saving before you get dressed next.\n\nStart with the outfit you actually want, then build the look around it.\n\n${secondCta}`,
     ];
   }
 
   if (post.postType === "BANNER") {
     return [
-      `${lead}\n\n${proofLine}\n\n${offerCue ? `${normalizeCaptionSentence(offerCue)} ` : ""}Use the offer when the product solves a real getting-dressed problem, not because a banner shouted at you.\n\n${firstCta}`,
-      `${post.theme} works best when the reason to buy is specific: fit, long wear, smoother lines, or one less outfit problem.\n\n${secondCta}`,
+      `${lead}\n\n${proofLine}\n\n${offerCue ? `${normalizeCaptionSentence(offerCue)} ` : ""}It earns its place because it makes the whole outfit easier to wear, not because a banner said so.\n\n${firstCta}`,
+      `${post.theme} works best when it just slips under whatever you're wearing and you stop thinking about it.\n\n${secondCta}`,
     ];
   }
 
   return [
-    `${lead}\n\n${proofLine}\n\nThat is the difference between a piece that only looks good in the mirror and one that survives the actual day.\n\n${firstCta}`,
-    `${inspirationHook ? `${normalizeCaptionSentence(inspirationHook)}\n\n` : ""}${profile.brandName} note: support should make the outfit easier, not louder.\n\nKeep the body. Improve the base layer.\n\n${secondCta}`,
+    `${lead}\n\n${proofLine}\n\nThat's the difference between a piece you tolerate and one you actually reach for.\n\n${firstCta}`,
+    `${inspirationHook ? `${normalizeCaptionSentence(inspirationHook)}\n\n` : ""}${profile.brandName} note: the right base layer should make getting dressed feel good, not like work.\n\n${secondCta}`,
   ];
 }
 
 function buildCaptionProofLine(post: ContentPost) {
   const text = `${post.theme} ${post.angle} ${post.visualConcept} ${post.tiktokExecution} ${post.instagramExecution}`.toLowerCase();
 
-  if (text.includes("review") || text.includes("proof") || text.includes("comment")) {
-    return "The proof is in what people mention after wearing it for more than five minutes.";
+  if (/\b(style|styling|outfit|look|capsule|wardrobe|pair|layer|wear under|what to wear)\b/.test(text)) {
+    return "The trick is in how it's styled, not in changing anything about you.";
   }
 
-  if (text.includes("size") || text.includes("fit")) {
-    return "The point is not guessing smaller. It is choosing the size that still works when you sit, move, and breathe.";
+  if (/\b(strap|pad|insert|unsnap|detachable|seam|fabric|panel|material|no bra|construction)\b/.test(text)) {
+    return "The detail does a quiet job: comfortable on, easy to live in, invisible under what you put over it.";
   }
 
-  if (text.includes("offer") || text.includes("shop") || text.includes("exchange")) {
-    return "The practical reassurance matters: easy support, clearer sizing, and less risk in the first order.";
+  if (/\b(all[- ]day|invisible|no lines|under clothes|under anything|easy|forget)\b/.test(text)) {
+    return "The point is simple: it stays comfortable all day and disappears under whatever you wear.";
   }
 
-  if (text.includes("banner") || text.includes("product") || text.includes("detail")) {
-    return "The product detail should do a job: support, smooth, stay put, or make the outfit easier.";
-  }
-
-  return "The real test is not the first mirror check. It is what still feels good halfway through the day.";
+  return "The real test is whether you reach for it again — and whether it still feels good by evening.";
 }
 
 function findUsefulInspirationHook(captionPatterns: CompetitorPlanPattern[]) {

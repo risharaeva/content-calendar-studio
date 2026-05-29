@@ -2,8 +2,8 @@ import type { ContentPost } from "@prisma/client";
 import { format } from "date-fns";
 import { describe, expect, it } from "vitest";
 import {
-  buildCompetitorMechanicsGuide,
   buildContentTerritoryGuide,
+  buildCopyMechanicsGuide,
   buildCtaFallbacks,
   buildHookFallbacks,
   buildIdeaPoolItems,
@@ -62,31 +62,31 @@ describe("content period distribution", () => {
 });
 
 describe("post intent detection", () => {
-  it("detects sizing posts", () => {
-    expect(detectPostIntent(makePost({ theme: "How to choose your true bra size" }))).toBe("sizing");
+  it("detects styling posts", () => {
+    expect(detectPostIntent(makePost({ theme: "One piece, three outfits" }))).toBe("styling");
   });
 
-  it("detects offer posts", () => {
-    expect(detectPostIntent(makePost({ theme: "Spring sale with free exchange" }))).toBe("offer");
+  it("detects feature posts", () => {
+    expect(detectPostIntent(makePost({ theme: "Straps that don't dig" }))).toBe("feature");
   });
 
-  it("detects support explainer posts", () => {
-    expect(detectPostIntent(makePost({ theme: "How the wireless support is built" }))).toBe("support-explainer");
+  it("detects wearability posts", () => {
+    expect(detectPostIntent(makePost({ theme: "Invisible under everything you wear" }))).toBe("wearability");
   });
 
   it("falls back to general when nothing matches", () => {
-    expect(detectPostIntent(makePost({ theme: "Spring mood board" }))).toBe("general");
+    expect(detectPostIntent(makePost({ theme: "A quiet little announcement" }))).toBe("general");
   });
 });
 
-describe("intent-aware caption-packet fallbacks", () => {
-  it("returns intent-specific CTAs that differ from the general default", () => {
-    const sizing = buildCtaFallbacks(makePost({ theme: "size guide for between sizes" }));
-    const general = buildCtaFallbacks(makePost({ theme: "spring mood board" }));
+describe("territory-aware caption-packet fallbacks", () => {
+  it("returns territory-specific CTAs that differ from the general default", () => {
+    const styling = buildCtaFallbacks(makePost({ theme: "One piece, three outfits" }));
+    const general = buildCtaFallbacks(makePost({ theme: "A quiet little announcement" }));
 
-    expect(sizing).toHaveLength(2);
+    expect(styling).toHaveLength(2);
     expect(general).toHaveLength(2);
-    expect(sizing).not.toEqual(general);
+    expect(styling).not.toEqual(general);
   });
 
   it("always leads hooks with the planner's own angle", () => {
@@ -97,15 +97,15 @@ describe("intent-aware caption-packet fallbacks", () => {
   });
 });
 
-describe("competitor mechanics guide", () => {
+describe("copy mechanics guide", () => {
   it("never names a competitor brand", () => {
-    const text = buildCompetitorMechanicsGuide().join("\n");
+    const text = buildCopyMechanicsGuide().join("\n");
 
     expect(COMPETITOR_NAMES.test(text)).toBe(false);
   });
 
   it("frames banned phrases inside an explicit avoid list", () => {
-    const text = buildCompetitorMechanicsGuide().join("\n").toLowerCase();
+    const text = buildCopyMechanicsGuide().join("\n").toLowerCase();
 
     expect(text).toContain("hard avoids");
   });
