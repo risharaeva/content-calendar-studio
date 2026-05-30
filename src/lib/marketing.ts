@@ -1711,7 +1711,8 @@ function buildPostTypeInstructions(post: ContentPost): string[] {
       frameLine,
       "Also return carouselSlides: an array of 5-7 slide objects.",
       "Each slide object has keys: index (1-based number), frameType (one of WITH_PERSON, PRODUCT_ONLY, USEFUL, OTHER), frameDescription (string; fill ONLY when frameType is OTHER, else empty string), kicker (short label like 'Slide 01'), headline (string), body (string), mediaPrompt (a concrete standalone image prompt to shoot THIS slide).",
-      "Vary frameType across the slides (mix WITH_PERSON, PRODUCT_ONLY, and at least one USEFUL/infographic slide). Each mediaPrompt must stand on its own as an image brief.",
+      "The slides must tell ONE story with a clear arc, not a list of tips: slide 1 is a scroll-stopping hook scene; the middle slides build a specific styling/feature narrative (what to wear it under, how the look comes together, the detail that makes it work); the final slide is a satisfying payoff with a soft save/CTA. Every slide must ADVANCE the story — never repeat the same point.",
+      "Make each headline and body specific to THIS post's theme and angle (concrete moments and details), not generic shapewear lines. Vary frameType across the slides (mix WITH_PERSON, PRODUCT_ONLY, and at least one USEFUL/infographic). Each mediaPrompt must visualize that slide's beat and stand on its own as an image brief.",
     ];
   }
 
@@ -1776,12 +1777,9 @@ async function buildPacket(
         typeSpecificKey,
         "When a product is named above, make the copy, scenes/slides/banner, and every image prompt specifically about THAT product (its fit promise, needs, and construction). Do not drift to a different garment.",
         "Caption rules:",
-        "- Captions must sound social-native, specific, and human, not like brand manifesto copy.",
-        "- Use one concrete opening line from the post angle, then a short useful observation, proof, or fit logic.",
-        "- Adapt competitor/inspiration mechanics only as structure: hook shape, comment cue, offer cue, proof rhythm, or saveable framing. Do not copy competitor wording.",
-        "- For reels: caption should be short, witty, and easy to pair with a cover hook.",
-        "- For carousels: caption should tell people why to save or swipe, then add one practical takeaway.",
-        "- For banners/offers: caption should connect the offer to a real-life reason to act now, not shout generic discount language.",
+        "- Return TWO distinct captions: social-native, specific, human, good-vibes — not a brand manifesto, and NOT the same shape as your other posts.",
+        "- Lead with one concrete line from this post's angle/theme, then a real styling or wearability detail. Make the two captions different in structure from each other.",
+        "- Tie any 'feel great' to the style and the look, never to fixing the body; no age framing.",
         "- Avoid generic lines like 'discover comfort', 'feel confident', 'upgrade your wardrobe', 'designed for every body', or 'embrace your curves'.",
         "Hashtag rules:",
         `- The first hashtag must be ${ILARIA_BRAND_HASHTAG}.`,
@@ -2838,41 +2836,44 @@ function buildVideoScriptFallback(post: ContentPost): VideoScriptDto {
 
 function buildCarouselSlidesFallback(post: ContentPost): CarouselSlideDto[] {
   const lowerTheme = post.theme.toLowerCase();
+  // A light styling story arc: hook scene -> the look coming together -> the detail
+  // that makes it work -> how to wear it -> finished-look payoff. Styling-first, no
+  // fit-anxiety framing. The real creativity comes from the LLM; this is the safety net.
   const base: Array<Omit<CarouselSlideDto, "index" | "kicker">> = [
     {
       frameType: "WITH_PERSON",
       frameDescription: "",
-      headline: post.angle || `Let's talk about ${lowerTheme}.`,
-      body: "A small fit clue that changes the whole decision.",
-      mediaPrompt: `Soft sensual modern ILARIA cover image for ${lowerTheme}, woman 38-55, real-life dressing moment, premium realism, clean negative space for a headline`,
-    },
-    {
-      frameType: "PRODUCT_ONLY",
-      frameDescription: "",
-      headline: "What to actually look for",
-      body: "Pressure, rolling, straps, fabric tension, and where it sits after ten minutes.",
-      mediaPrompt: `Clean product-only studio shot for ${lowerTheme}, tactile fabric detail, soft daylight, no model, readable construction`,
-    },
-    {
-      frameType: "USEFUL",
-      frameDescription: "",
-      headline: "The quick fit rule",
-      body: "Use this as a calm shopping rule, not a body judgment.",
-      mediaPrompt: `Simple useful infographic-style layout summarizing the fit rule for ${lowerTheme}, brand colors, minimal icons, lots of negative space`,
+      headline: post.angle || `Styling ${lowerTheme}`,
+      body: "Start with the look you actually want to wear.",
+      mediaPrompt: `Scroll-stopping opening styling scene for ${lowerTheme}, woman in a real, chic outfit moment, premium realism, clean negative space for a headline`,
     },
     {
       frameType: "WITH_PERSON",
       frameDescription: "",
-      headline: cleanCarouselLine(post.visualConcept || post.goal),
-      body: "How it looks in real clothes, sitting and moving.",
-      mediaPrompt: `Editorial intimates visual for "${post.angle}", warm daylight, polished but human, product readable`,
+      headline: "Here's how the look comes together",
+      body: cleanCarouselLine(post.visualConcept || "The outfit, and the piece that quietly makes it sit right underneath."),
+      mediaPrompt: `Outfit-building styling shot for "${post.angle}", layered look coming together, warm daylight, polished but human`,
     },
     {
       frameType: "PRODUCT_ONLY",
       frameDescription: "",
-      headline: "Save this before your next order",
-      body: "Keep it as a reference when you choose your first size.",
-      mediaPrompt: `Calm closing product flat-lay for ${lowerTheme}, premium packaging feel, brand palette, space for a CTA`,
+      headline: "The detail that makes it work",
+      body: "Soft where it touches you, smooth and invisible under whatever you put over it.",
+      mediaPrompt: `Clean product-only detail shot for ${lowerTheme}, tactile fabric and construction, soft daylight, no model`,
+    },
+    {
+      frameType: "USEFUL",
+      frameDescription: "",
+      headline: "What to wear it under",
+      body: "Three outfits this one piece quietly upgrades.",
+      mediaPrompt: `Simple styling infographic for ${lowerTheme}: one base piece, three outfit pairings, brand colors, minimal icons, lots of negative space`,
+    },
+    {
+      frameType: "WITH_PERSON",
+      frameDescription: "",
+      headline: "The finished look",
+      body: "Save this for the next time you're getting dressed.",
+      mediaPrompt: `Confident finished-look styling shot for "${post.angle}", full outfit, good-vibes energy, product readable`,
     },
   ];
   return base.map((slide, index) => ({
