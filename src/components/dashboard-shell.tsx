@@ -118,7 +118,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
   const [error, setError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [productionPrompt, setProductionPrompt] = useState<{ postId: string; text: string; kind: "image" | "video" } | null>(null);
-  const [activeTab, setActiveTab] = useState<"inputs" | "calendar" | "analytics">("inputs");
+  const [activeTab, setActiveTab] = useState<"inputs" | "calendar" | "analytics" | "feed">("inputs");
   const [activeInputTab, setActiveInputTab] = useState<"plan" | "inspiration" | "strategy" | "advanced">("plan");
   const [productOptions, setProductOptions] = useState<ShootStudioProduct[]>(SHOOT_STUDIO_PRODUCTS);
   const [frameTypeChoice, setFrameTypeChoice] = useState<FrameTypeValue>("WITH_PERSON");
@@ -577,9 +577,10 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
           </div>
         </header>
 
-        <nav className="mt-4 grid gap-2 rounded-[16px] border border-[#ded8cc] bg-[#fffcf7]/80 p-2 shadow-[0_14px_40px_rgba(46,40,28,0.06)] sm:grid-cols-3">
+        <nav className="mt-4 grid gap-2 rounded-[16px] border border-[#ded8cc] bg-[#fffcf7]/80 p-2 shadow-[0_14px_40px_rgba(46,40,28,0.06)] sm:grid-cols-2 lg:grid-cols-4">
           <TabButton active={activeTab === "inputs"} onClick={() => setActiveTab("inputs")} label="Inputs" icon={<Target size={16} />} />
           <TabButton active={activeTab === "calendar"} onClick={() => setActiveTab("calendar")} label="Content Calendar" icon={<CalendarDays size={16} />} />
+          <TabButton active={activeTab === "feed"} onClick={() => setActiveTab("feed")} label="Feed preview" icon={<ImageIcon size={16} />} />
           <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")} label="Analytics" icon={<BarChart3 size={16} />} />
         </nav>
 
@@ -589,6 +590,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
             activeTab === "inputs" && "grid",
             activeTab === "calendar" && "grid xl:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.4fr)]",
             activeTab === "analytics" && "hidden",
+            activeTab === "feed" && "hidden",
           )}
         >
           <section className={cn(
@@ -1285,6 +1287,10 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
           </section>
         ) : null}
 
+        {activeTab === "feed" ? (
+          <FeedPreview calendar={dashboard.calendar} publishedPosts={publishedPosts} />
+        ) : null}
+
         <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#ded8cc] bg-[#fffcf7]/85 px-4 py-3 text-sm text-slate-600">
           <p>{flash ?? "Ready."}</p>
           <p className={cn(error ? "text-red-600" : "text-slate-500")}>{error ?? "Local data stays on this workstation."}</p>
@@ -1585,6 +1591,121 @@ function canRenderVisualReferenceImage(path: string) {
   ) && (
     value.includes("images.unsplash.com") ||
     /\.(avif|gif|jpeg|jpg|png|webp)$/i.test(value)
+  );
+}
+
+interface FeedTileItem {
+  id: string;
+  kind: "planned" | "published";
+  date: string;
+  image: string;
+  label: string;
+  postType?: string;
+}
+
+function feedCoverUrl(post: ContentPostDto) {
+  const cover = [...post.images]
+    .sort((a, b) => a.variant - b.variant)
+    .find((image) => canRenderVisualReferenceImage(image.imagePath));
+  return cover?.imagePath ?? "";
+}
+
+// Merges planned posts (calendar) and published posts into one platform feed,
+// newest first — so future planned tiles sit on top, showing how the grid will
+// look once published. platform=BOTH posts appear in both feeds.
+function buildFeedItems(
+  calendar: ContentPostDto[],
+  published: PublishedPostDto[],
+  platform: "INSTAGRAM" | "TIKTOK",
+): FeedTileItem[] {
+  const onPlatform = (value: string) => value === platform || value === "BOTH";
+
+  const planned: FeedTileItem[] = calendar
+    .filter((post) => onPlatform(post.platform))
+    .map((post) => ({
+      id: `plan-${post.id}`,
+      kind: "planned",
+      date: post.plannedDate,
+      image: feedCoverUrl(post),
+      label: post.theme || post.angle || "Planned post",
+      postType: post.postType,
+    }));
+
+  const live: FeedTileItem[] = published
+    .filter((post) => onPlatform(post.platform))
+    .map((post) => ({
+      id: `live-${post.id}`,
+      kind: "published",
+      date: post.publishedAt,
+      image: canRenderVisualReferenceImage(post.imageUrl) ? post.imageUrl : "",
+      label: post.title || post.format || "Published post",
+    }));
+
+  return [...planned, ...live].toSorted(
+    (left, right) => new Date(right.date).getTime() - new Date(left.date).getTime(),
+  );
+}
+
+function FeedPreview({
+  calendar,
+  publishedPosts,
+}: {
+  calendar: ContentPostDto[];
+  publishedPosts: PublishedPostDto[];
+}) {
+  return (
+    <section className="mt-4 grid gap-4 lg:grid-cols-2">
+      <FeedColumn title="Instagram" items={buildFeedItems(calendar, publishedPosts, "INSTAGRAM")} />
+      <FeedColumn title="TikTok" items={buildFeedItems(calendar, publishedPosts, "TIKTOK")} />
+    </section>
+  );
+}
+
+function FeedColumn({ title, items }: { title: string; items: FeedTileItem[] }) {
+  return (
+    <div className="rounded-[18px] border border-[#ded8cc] bg-[#fffcf7]/90 p-4 shadow-[0_18px_60px_rgba(46,40,28,0.06)]">
+      <div className="flex items-center justify-between gap-3">
+        <SectionHeader eyebrow="Feed preview" title={title} />
+        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">{items.length} tiles</span>
+      </div>
+      {items.length ? (
+        <div className="mt-4 grid grid-cols-3 gap-1.5">
+          {items.map((item) => (
+            <FeedTile key={item.id} item={item} />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-[15px] font-medium leading-6 text-slate-700">
+          No planned or published posts for this feed yet. Recreate the plan, or log a published post in Analytics.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function FeedTile({ item }: { item: FeedTileItem }) {
+  return (
+    <div className="relative aspect-square overflow-hidden rounded-[8px] border border-black/10 bg-[#f3f0e9]">
+      {item.image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={item.image} alt={item.label} className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center p-2 text-center text-[11px] font-medium leading-4 text-slate-600">
+          {item.label}
+        </div>
+      )}
+      <span
+        className={cn(
+          "absolute left-1 top-1 rounded-[6px] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em]",
+          item.kind === "planned" ? "bg-slate-900/80 text-white" : "bg-emerald-600/85 text-white",
+        )}
+      >
+        {item.kind === "planned" ? "Plan" : "Live"}
+      </span>
+      <span className="absolute bottom-1 right-1 rounded-[6px] bg-black/55 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+        {format(new Date(item.date), "MMM d")}
+      </span>
+    </div>
   );
 }
 
