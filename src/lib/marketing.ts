@@ -24,7 +24,7 @@ import { getOllamaStatus } from "@/lib/ollama";
 import { prisma } from "@/lib/prisma";
 import { computeAutoScore, Metrics } from "@/lib/scoring";
 import { findShootStudioProduct, SHOOT_STUDIO_PRODUCTS } from "@/lib/shoot-studio-catalog";
-import { generateJsonWithTextRoute } from "@/lib/text-generation";
+import { describeReferenceStyle, generateJsonWithTextRoute } from "@/lib/text-generation";
 import {
   AppSettingsDto,
   BannerBriefDto,
@@ -153,6 +153,7 @@ interface PostIdeaInput {
   tiktokExecution: string;
   instagramExecution: string;
   assetLinks: string;
+  referenceImageUrl: string;
   imageFormatKey: string;
   imageResolution: string;
   imageStyle: string;
@@ -777,6 +778,7 @@ export async function updatePostIdea(postId: string, input: PostIdeaInput) {
         tiktokExecution: input.tiktokExecution,
         instagramExecution: input.instagramExecution,
         assetLinks: input.assetLinks,
+        referenceImageUrl: input.referenceImageUrl,
         imageFormatKey: input.imageFormatKey,
         imageResolution: input.imageResolution,
         imageStyle: input.imageStyle,
@@ -1067,6 +1069,11 @@ export async function renderPostImages(postId: string, mode = "cover") {
   const prompts = safeArray(post.packet.imagePromptVariants);
   const renderMode = normalizeRenderMode(mode, post);
 
+  // When the post has a style reference, describe it once with vision and weave
+  // that style brief into every render prompt so the output echoes its look (the
+  // garment still comes from the selected product, not the reference).
+  const styleBrief = post.referenceImageUrl ? await describeReferenceStyle(post.referenceImageUrl) : "";
+
   const referenceImages = await prisma.imageAsset.findMany({
     where: {
       projectId: post.projectId,
@@ -1094,7 +1101,7 @@ export async function renderPostImages(postId: string, mode = "cover") {
 
       for (const [index, prompt] of slidePrompts.entries()) {
         const imagePath = await renderPromptToImage({
-          prompt,
+          prompt: applyStyleBrief(prompt, styleBrief),
           postId,
           variant: index + 1,
           settings,
@@ -1124,7 +1131,7 @@ export async function renderPostImages(postId: string, mode = "cover") {
 
   for (const [index, prompt] of promptsToRender.entries()) {
     const imagePath = await renderPromptToImage({
-      prompt,
+      prompt: applyStyleBrief(prompt, styleBrief),
       postId,
       variant: index + 1,
       settings,
@@ -1143,6 +1150,15 @@ export async function renderPostImages(postId: string, mode = "cover") {
   await replaceGeneratedImages(postId, images);
 
   return getDashboardState(post.projectId);
+}
+
+// Appends the vision-derived style brief to a render prompt so the generated
+// image echoes the reference's look while keeping ILARIA's own product.
+function applyStyleBrief(prompt: string, styleBrief: string): string {
+  if (!styleBrief.trim()) {
+    return prompt;
+  }
+  return `${prompt}\n\nMatch this visual style — mimic the composition, framing, lighting, palette, and mood, but do NOT copy it exactly and keep ILARIA's own product: ${styleBrief.trim()}`;
 }
 
 function normalizeRenderMode(mode: string, post: ContentPost) {
@@ -3361,6 +3377,7 @@ function mapPost(post: PostWithRelations): ContentPostDto {
     tiktokExecution: post.tiktokExecution,
     instagramExecution: post.instagramExecution,
     assetLinks: post.assetLinks,
+    referenceImageUrl: post.referenceImageUrl,
     imageFormatKey: post.imageFormatKey,
     imageResolution: post.imageResolution,
     imageStyle: post.imageStyle,

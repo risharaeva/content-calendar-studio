@@ -393,6 +393,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
       tiktokExecution: String(formData.get("tiktokExecution") ?? ""),
       instagramExecution: String(formData.get("instagramExecution") ?? ""),
       assetLinks: String(formData.get("assetLinks") ?? ""),
+      referenceImageUrl: String(formData.get("referenceImageUrl") ?? ""),
       productId: String(formData.get("productId") ?? ""),
       imageFormatKey: String(formData.get("imageFormatKey") ?? "reels_tiktok_cover"),
       imageResolution: String(formData.get("imageResolution") ?? "1080x1920"),
@@ -956,6 +957,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                       <Field label="TikTok version" name="tiktokExecution" defaultValue={selectedPost.tiktokExecution} textarea />
                       <Field label="Instagram version" name="instagramExecution" defaultValue={selectedPost.instagramExecution} textarea />
                       <Field label="Prepared image / video links, files, or folders" name="assetLinks" defaultValue={selectedPost.assetLinks} textarea />
+                      <Field label="Reference image to replicate (URL)" name="referenceImageUrl" defaultValue={selectedPost.referenceImageUrl} placeholder="https://… a direct image link; its style is mimicked on generate" />
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-2 text-sm font-medium text-slate-800">
@@ -1824,6 +1826,7 @@ function Field({
   min,
   max,
   step,
+  placeholder,
 }: {
   label: string;
   name: string;
@@ -1833,6 +1836,7 @@ function Field({
   min?: number;
   max?: number;
   step?: number;
+  placeholder?: string;
 }) {
   return (
     <label className="grid gap-2 text-sm font-medium text-slate-800">
@@ -1842,6 +1846,7 @@ function Field({
           name={name}
           defaultValue={defaultValue}
           rows={4}
+          placeholder={placeholder}
           className="min-h-[112px] rounded-[10px] border border-black/10 bg-white/90 px-3 py-2.5 text-[15px] font-medium leading-6 text-slate-950 outline-none placeholder:text-slate-400 focus:border-slate-900 md:text-base"
         />
       ) : (
@@ -1852,6 +1857,7 @@ function Field({
           min={min}
           max={max}
           step={step}
+          placeholder={placeholder}
           inputMode={type === "number" ? "numeric" : undefined}
           className="rounded-[10px] border border-black/10 bg-white/90 px-3 py-2.5 text-[15px] font-medium leading-6 text-slate-950 outline-none placeholder:text-slate-400 focus:border-slate-900 md:text-base"
         />

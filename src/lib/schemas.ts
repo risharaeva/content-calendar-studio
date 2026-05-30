@@ -75,6 +75,7 @@ export const postIdeaSchema = z.object({
   tiktokExecution: z.string().trim().max(1200),
   instagramExecution: z.string().trim().max(1200),
   assetLinks: z.string().trim().max(4000),
+  referenceImageUrl: z.string().trim().max(2000).default(""),
   imageFormatKey: z.string().trim().min(2).max(80),
   imageResolution: z.string().trim().min(3).max(40),
   imageStyle: z.string().trim().max(400),

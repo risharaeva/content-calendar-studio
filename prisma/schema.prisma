@@ -149,6 +149,7 @@ model ContentPost {
   tiktokExecution     String  @default("")
   instagramExecution  String  @default("")
   assetLinks          String  @default("")
+  referenceImageUrl   String  @default("")
   imageFormatKey      String  @default("reels_tiktok_cover")
   imageResolution     String  @default("1080x1920")
   imageStyle          String  @default("")

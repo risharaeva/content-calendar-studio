@@ -161,6 +161,39 @@ async function generateJsonFromOpenAI<T>(model: string, prompt: string) {
   return parseJsonOutput<T>(outputText);
 }
 
+// Asks a vision model (gpt-4o) to describe a reference image as a reusable STYLE
+// brief (composition, framing, light, palette, mood) — NOT the specific garment —
+// so the look can be echoed while the post's own product is rendered. Returns ""
+// on any failure so rendering proceeds normally without the reference.
+export async function describeReferenceStyle(imageUrl: string): Promise<string> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || !imageUrl.trim()) {
+    return "";
+  }
+  try {
+    const client = new OpenAI({ apiKey });
+    const response = await client.responses.create({
+      model: "gpt-4o",
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: "Describe this image as a reusable VISUAL STYLE brief for recreating its look in a different photo: composition and framing, camera angle and distance, lighting and mood, color palette, background/setting, styling and props, and overall vibe. 2-4 sentences. Describe STYLE only — do NOT lock the specific garment or product, because a different product will be shown.",
+            },
+            { type: "input_image", image_url: imageUrl.trim(), detail: "auto" },
+          ],
+        },
+      ],
+    });
+    return (response.output_text || "").trim();
+  } catch (error) {
+    console.warn("Reference style description failed.", error);
+    return "";
+  }
+}
+
 async function generateJsonFromAnthropic<T>(model: string, prompt: string) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 

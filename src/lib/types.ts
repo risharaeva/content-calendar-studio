@@ -177,6 +177,7 @@ export interface ContentPostDto {
   tiktokExecution: string;
   instagramExecution: string;
   assetLinks: string;
+  referenceImageUrl: string;
   imageFormatKey: string;
   imageResolution: string;
   imageStyle: string;
