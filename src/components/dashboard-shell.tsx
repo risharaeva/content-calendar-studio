@@ -1,5 +1,6 @@
 "use client";
 
+import { upload } from "@vercel/blob/client";
 import { useDeferredValue, useEffect, useRef, useState, useTransition } from "react";
 import { addDays, differenceInCalendarDays, format, isValid, parseISO } from "date-fns";
 import {
@@ -957,7 +958,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                       <Field label="TikTok version" name="tiktokExecution" defaultValue={selectedPost.tiktokExecution} textarea />
                       <Field label="Instagram version" name="instagramExecution" defaultValue={selectedPost.instagramExecution} textarea />
                       <Field label="Prepared image / video links, files, or folders" name="assetLinks" defaultValue={selectedPost.assetLinks} textarea />
-                      <Field label="Reference image to replicate (URL)" name="referenceImageUrl" defaultValue={selectedPost.referenceImageUrl} placeholder="https://… a direct image link; its style is mimicked on generate" />
+                      <ReferenceImageField key={selectedPost.id} name="referenceImageUrl" defaultValue={selectedPost.referenceImageUrl} />
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-2 text-sm font-medium text-slate-800">
@@ -1814,6 +1815,63 @@ function SectionHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
       <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-600">{eyebrow}</p>
       <h2 className="text-xl font-semibold tracking-[-0.03em] text-slate-950">{title}</h2>
     </div>
+  );
+}
+
+function ReferenceImageField({ name, defaultValue }: { name: string; defaultValue: string }) {
+  const [value, setValue] = useState(defaultValue);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const blob = await upload(file.name, file, { access: "public", handleUploadUrl: "/api/upload" });
+      setValue(blob.url);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+      event.target.value = "";
+    }
+  }
+
+  return (
+    <label className="grid gap-2 text-sm font-medium text-slate-800">
+      <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Reference image to replicate</span>
+      <input
+        name={name}
+        type="text"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="https://… direct image link, or upload below"
+        className="rounded-[10px] border border-black/10 bg-white/90 px-3 py-2.5 text-[15px] font-medium leading-6 text-slate-950 outline-none placeholder:text-slate-400 focus:border-slate-900 md:text-base"
+      />
+      <div className="flex items-center gap-3">
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-[10px] border border-black/10 bg-[#f3f0e9] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700 transition hover:bg-white">
+          {uploading ? "Uploading…" : "Upload image"}
+          <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={handleFile} />
+        </label>
+        {value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={value}
+            alt="Reference"
+            className="h-12 w-12 rounded-[8px] border border-black/10 object-cover"
+            onError={(event) => {
+              event.currentTarget.style.display = "none";
+            }}
+          />
+        ) : null}
+      </div>
+      {error ? <p className="text-xs font-medium text-red-600">{error}</p> : null}
+      <p className="text-xs font-medium leading-5 text-slate-500">
+        Its style (composition, light, mood) is mimicked when you generate images. The garment stays your selected product.
+      </p>
+    </label>
   );
 }
 
