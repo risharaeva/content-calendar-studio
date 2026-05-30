@@ -121,7 +121,7 @@ export function isProviderConfigured(provider: string) {
 // copy reads varied and human instead of falling into the model's most-likely
 // (most generic) phrasing. The anti-cliché style guard in the prompt does the
 // heavy lifting; this just widens the lane.
-const TEXT_TEMPERATURE = 0.85;
+const TEXT_TEMPERATURE = 1;
 
 // Some OpenAI models (the reasoning o-series and similar) reject any temperature
 // other than the default and 400 on it. Detect that specific failure so we can
