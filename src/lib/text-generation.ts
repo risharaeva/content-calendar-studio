@@ -51,7 +51,7 @@ function resolveTextRoute(dbProvider: string, dbModel: string, ollamaModel: stri
   }
 
   if (process.env.OPENAI_API_KEY) {
-    return { provider: "OPENAI", model: envModel || "gpt-4o-mini" };
+    return { provider: "OPENAI", model: envModel || "gpt-4o" };
   }
 
   return { provider: "OLLAMA", model: dbModel || ollamaModel };
@@ -59,7 +59,7 @@ function resolveTextRoute(dbProvider: string, dbModel: string, ollamaModel: stri
 
 function defaultModelFor(provider: TextProvider, dbModel: string, ollamaModel: string): string {
   if (provider === "OPENAI") {
-    return "gpt-4o-mini";
+    return "gpt-4o";
   }
   if (provider === "ANTHROPIC") {
     return dbModel || "claude-3-5-haiku-latest";
