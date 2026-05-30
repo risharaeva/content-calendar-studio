@@ -1631,15 +1631,23 @@ function buildFeedItems(
       postType: post.postType,
     }));
 
-  const live: FeedTileItem[] = published
-    .filter((post) => onPlatform(post.platform))
-    .map((post) => ({
-      id: `live-${post.id}`,
-      kind: "published",
-      date: post.publishedAt,
-      image: canRenderVisualReferenceImage(post.imageUrl) ? post.imageUrl : "",
-      label: post.title || post.format || "Published post",
-    }));
+  // A post can be logged repeatedly as history snapshots; show each published post
+  // once in the feed, using its most recent snapshot.
+  const latestByPost = new Map<string, PublishedPostDto>();
+  for (const post of published.filter((post) => onPlatform(post.platform))) {
+    const key = post.postUrl || post.id;
+    const current = latestByPost.get(key);
+    if (!current || new Date(post.capturedAt).getTime() > new Date(current.capturedAt).getTime()) {
+      latestByPost.set(key, post);
+    }
+  }
+  const live: FeedTileItem[] = [...latestByPost.values()].map((post) => ({
+    id: `live-${post.id}`,
+    kind: "published",
+    date: post.publishedAt,
+    image: canRenderVisualReferenceImage(post.imageUrl) ? post.imageUrl : "",
+    label: post.title || post.format || "Published post",
+  }));
 
   return [...planned, ...live].toSorted(
     (left, right) => new Date(right.date).getTime() - new Date(left.date).getTime(),
