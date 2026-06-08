@@ -362,7 +362,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
 
     const kind = isVideoPost(selectedPost) ? "video" : "image";
     const prompt = kind === "video"
-      ? buildProductionVideoBrief(selectedPost, dashboard.profile, [])
+      ? buildProductionVideoBrief(selectedPost, dashboard.profile)
       : buildProductionImagePrompt(selectedPost, []);
     setProductionPrompt({ postId: selectedPost.id, text: prompt, kind });
     setError(null);
@@ -370,7 +370,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
     try {
       await navigator.clipboard.writeText(prompt);
       setFlash(kind === "video"
-        ? "Video brief copied. Send it to the creator, editor, or production specialist."
+        ? "Video brief copied. Paste it into your video generator, frame by frame."
         : "Image brief copied. Paste it into ChatGPT, Nano Banana, or ComfyUI.");
     } catch {
       setFlash(kind === "video" ? "Video brief prepared. Copy it from the field below." : "Image brief prepared. Copy it from the field below.");
@@ -2342,64 +2342,46 @@ function buildImageModelPromptSentence({
   ].join(" ");
 }
 
-function buildProductionVideoBrief(post: ContentPostDto, profile: ProjectProfileDto, imageAssets: ImageAssetDto[]) {
-  const selectedAssets = imageAssets.filter((asset) => post.imageReferenceIds.includes(asset.id));
-  const productReferences = selectedAssets.filter((asset) => asset.type === "PRODUCT" || asset.type === "PRODUCT_ON_BODY");
-  const styleReferences = selectedAssets.filter((asset) => asset.type === "STYLE_REFERENCE" || asset.type === "BACKGROUND" || asset.type === "BANNER_REFERENCE");
+function buildProductionVideoBrief(post: ContentPostDto, profile: ProjectProfileDto) {
+  const script = post.packet?.videoScript ?? null;
+  const product = SHOOT_STUDIO_PRODUCTS.find((item) => item.id === post.productId) ?? null;
   const platformUse = post.platform === "BOTH" ? "TikTok and Instagram Reels" : labelPlatform(post.platform);
-  const hooks = post.packet?.hookVariants?.length ? post.packet.hookVariants : [post.angle];
-  const ctas = post.packet?.ctaVariants?.length ? post.packet.ctaVariants : ["Save this before choosing the product.", "Comment with your fit question."];
-  const captions = post.packet?.captionVariants?.length ? post.packet.captionVariants : [];
-  const visualBrief = post.packet?.visualBrief || post.visualConcept;
+
+  const fallbackScenes = [
+    { index: 1, durationSec: 3, description: cleanPromptLine(post.angle || post.theme) },
+    { index: 2, durationSec: 5, description: cleanPromptLine(post.visualConcept || post.tiktokExecution || "The look comes together; the product worn naturally in a real, chic moment.") },
+    { index: 3, durationSec: 3, description: cleanPromptLine(post.instagramExecution || "Finished look — calm, confident closing beat.") },
+  ];
+  const scenes = script?.scenes?.length ? script.scenes : fallbackScenes;
+
+  const frames = scenes.map((scene, index) => {
+    const order = scene.index || index + 1;
+    const seconds = scene.durationSec || 3;
+    return [
+      `FRAME ${order} — ${seconds} sec`,
+      `  Visual: ${cleanPromptLine(scene.description || post.angle)}`,
+      "  Cover its setting/environment, props and what to use, camera angle and shot, the movement, and the mood. No on-screen text.",
+    ].join("\n");
+  });
+
+  const total = script?.totalDurationSec || scenes.reduce((sum, scene) => sum + (scene.durationSec || 0), 0) || 15;
 
   return [
-    "TASK: Produce one finished short-form video from this brief. This is a production task for a creator, editor, or video specialist, not an image-generation prompt.",
-    `BRAND/AUDIENCE: ${cleanPromptLine(profile.brandName || "ILARIA")} for ${cleanPromptLine(profile.audience || "adult women 38-55")}. Tasteful, modern, premium, warm, useful.`,
-    `PLATFORM USE: ${platformUse}.`,
-    `FORMAT: ${cleanPromptLine(post.format || "Reel")}.`,
-    "RECOMMENDED LENGTH: 8-18 seconds unless the hook needs a slower demonstration.",
-    "OUTPUT: vertical 9:16 video, social-ready, with clean first frame and room for platform captions.",
+    "TASK: A shot-by-shot brief for GENERATING a short vertical video frame by frame (no human editor). Each frame below is one visual clip to generate.",
+    "RULES: no on-screen text, no captions, no color codes (hex), no font names — only visual direction (setting, props, camera, movement, mood).",
+    `BRAND / TONE: ${cleanPromptLine(profile.brandName || "ILARIA")} — aspirational, chic, good vibes, modern.`,
+    `PLATFORM / FORMAT: ${platformUse}, vertical 9:16.`,
+    product
+      ? `PRODUCT: ${cleanPromptLine(product.name)} — keep it readable and naturally worn; do not invent garment details.`
+      : "PRODUCT: the selected ILARIA piece — keep it readable and naturally worn.",
+    `TOPIC / ANGLE: ${cleanPromptLine(post.theme)} — ${cleanPromptLine(post.angle)}.`,
     "",
-    `OBJECTIVE: ${cleanPromptLine(post.packet?.objective || post.goal)}`,
-    `CORE ANGLE: ${cleanPromptLine(post.packet?.coreAngle || post.angle)}`,
-    `TOPIC: ${cleanPromptLine(post.theme)}`,
+    "FRAMES:",
+    ...frames,
     "",
-    "HOOK OPTIONS:",
-    formatBriefList(hooks),
-    "",
-    "VIDEO STRUCTURE:",
-    `1. First 1-2 seconds: open with the strongest hook and a visually specific situation: ${cleanPromptLine(post.angle)}.`,
-    `2. Middle: show the proof or action clearly: ${cleanPromptLine(post.tiktokExecution || visualBrief || "demonstrate the problem, then the product-supported resolution")}.`,
-    `3. Final beat: resolve into a tasteful product/fit/comfort proof and use one CTA: ${cleanPromptLine(ctas[0] || "Save this before choosing the product.")}.`,
-    "",
-    "SHOT LIST / VISUAL DIRECTION:",
-    `- Main scene: ${cleanPromptLine(visualBrief || "premium, warm, adult-life fashion moment with clear product relevance")}.`,
-    `- Product/detail shot: ${productReferences.length ? `use selected product references: ${formatReferenceGroup(productReferences)}` : "include product detail only if it is truthful and available."}`,
-    `- Style reference: ${styleReferences.length ? formatReferenceGroup(styleReferences) : cleanPromptLine(post.imageStyle || "premium editorial, warm refined light")}.`,
-    `- Cover/first frame: ${cleanPromptLine(post.imageObjects || post.visualConcept || post.angle)}. Leave negative space for title text added later.`,
-    "",
-    "EDITING NOTES:",
-    "- Keep pacing clean and readable, not chaotic.",
-    "- Use natural movement: mirror adjustment, hands showing detail, outfit transition, sitting/walking/long-day proof when relevant.",
-    "- Avoid before/after body transformation language. Show same-body, better support/comfort/product logic.",
-    "- Text overlays should be short, high-contrast, and readable on mobile.",
-    "- Do not oversexualize, distort body proportions, or invent product details.",
-    "",
-    "INSTAGRAM VERSION:",
-    cleanPromptLine(post.instagramExecution || "Use polished cover, concise caption, and saveable framing."),
-    "",
-    "TIKTOK VERSION:",
-    cleanPromptLine(post.tiktokExecution || "Use faster hook delivery, more direct demonstration, and natural spoken/text-led pacing."),
-    captions.length ? ["", "CAPTION DIRECTIONS:", formatBriefList(captions)].join("\n") : "",
-    "",
-    "CTA OPTIONS:",
-    formatBriefList(ctas),
-    post.assetLinks ? ["", `PREPARED ASSETS / LINKS: ${cleanPromptLine(post.assetLinks)}`].join("\n") : "",
+    `TOTAL DURATION: ${total} sec.`,
+    "GUARDRAILS: same body (no before/after), no oversexualization, no body distortion, no age framing.",
   ].filter(Boolean).join("\n");
-}
-
-function formatBriefList(items: string[]) {
-  return items.map((item, index) => `${index + 1}. ${cleanPromptLine(item)}`).join("\n");
 }
 
 function formatReferenceGroup(assets: ImageAssetDto[]) {

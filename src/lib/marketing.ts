@@ -1719,9 +1719,9 @@ function buildPostTypeInstructions(post: ContentPost): string[] {
     return [
       "This is a VIDEO (reel/TikTok) post.",
       frameLine,
-      "Also return a videoScript object with keys: coverHook (string, the first-frame hook), totalDurationSec (number, 15-45), and scenes (array of 3-6 objects).",
-      "Each scene object has keys: index (1-based number), durationSec (number), description (what is filmed in this scene), onScreenText (caption burned on screen), voiceOver (spoken line, may be empty).",
-      "Scenes must form a clear filmable sequence: hook, problem/tension, product proof, payoff/CTA. Keep each scene concrete and shootable.",
+      "Also return a videoScript object with keys: coverHook (string, the first visual idea — a scene, not text), totalDurationSec (number, 15-45), and scenes (array of 3-6 objects).",
+      "Each scene object has keys: index (1-based number), durationSec (number), description (a VISUAL generation direction for THIS frame: the setting/environment, props and what to use, the camera angle and shot, the movement, and the mood — NO on-screen text), onScreenText (leave as an empty string: the video is generated, so no burned-in text), voiceOver (leave empty unless clearly useful).",
+      "Scenes must form a clear visual sequence (opening scene, the look or feature building, the payoff). Each description must be concrete enough to GENERATE that frame as a short video clip — no text, no color codes, no font names.",
     ];
   }
 
