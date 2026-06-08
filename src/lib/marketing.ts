@@ -147,6 +147,7 @@ interface PostIdeaInput {
   defaultFrameType: "WITH_PERSON" | "PRODUCT_ONLY" | "USEFUL" | "OTHER";
   frameDescription: string;
   productId: string;
+  modelId: string;
   theme: string;
   angle: string;
   visualConcept: string;
@@ -772,6 +773,7 @@ export async function updatePostIdea(postId: string, input: PostIdeaInput) {
         defaultFrameType: input.defaultFrameType,
         frameDescription: input.frameDescription,
         productId: input.productId,
+        modelId: input.modelId,
         theme: input.theme,
         angle: input.angle,
         visualConcept: input.visualConcept,
@@ -1107,6 +1109,7 @@ export async function renderPostImages(postId: string, mode = "cover") {
           settings,
           imageFormatKey: post.imageFormatKey,
           productId: post.productId,
+          modelId: post.modelId,
           referenceImages: referenceList,
         });
 
@@ -1137,6 +1140,7 @@ export async function renderPostImages(postId: string, mode = "cover") {
       settings,
       imageFormatKey: post.imageFormatKey,
       productId: post.productId,
+      modelId: post.modelId,
       referenceImages: referenceList,
     });
 
@@ -3371,6 +3375,7 @@ function mapPost(post: PostWithRelations): ContentPostDto {
     defaultFrameType: post.defaultFrameType,
     frameDescription: post.frameDescription,
     productId: post.productId,
+    modelId: post.modelId,
     theme: post.theme,
     angle: post.angle,
     visualConcept: post.visualConcept,

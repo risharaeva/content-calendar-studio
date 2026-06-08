@@ -69,6 +69,7 @@ export const postIdeaSchema = z.object({
   defaultFrameType: frameTypeSchema.default("WITH_PERSON"),
   frameDescription: z.string().trim().max(800).default(""),
   productId: z.string().trim().max(120).default(""),
+  modelId: z.string().trim().max(120).default(""),
   theme: z.string().trim().min(2).max(140),
   angle: z.string().trim().min(3).max(500),
   visualConcept: z.string().trim().max(1200),

@@ -171,6 +171,7 @@ export interface ContentPostDto {
   defaultFrameType: FrameTypeValue;
   frameDescription: string;
   productId: string;
+  modelId: string;
   theme: string;
   angle: string;
   visualConcept: string;

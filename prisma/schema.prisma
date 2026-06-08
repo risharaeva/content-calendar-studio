@@ -143,6 +143,7 @@ model ContentPost {
   defaultFrameType FrameType  @default(WITH_PERSON)
   frameDescription String     @default("")
   productId   String          @default("")
+  modelId     String          @default("")
   theme       String
   angle       String
   visualConcept       String  @default("")

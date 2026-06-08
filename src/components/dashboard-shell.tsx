@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { AUTO_CLASS_LABELS, FRAME_TYPE_LABELS, FRAME_TYPE_OPTIONS, PLATFORM_OPTIONS, POST_TYPE_OPTIONS, STATUS_LABELS, STATUS_OPTIONS } from "@/lib/constants";
 import { AppSettingsDto, BannerBriefDto, CarouselSlideDto, CompetitorPostDto, ContentPostDto, DashboardState, FrameTypeValue, ImageAssetDto, PlanEventDto, ProjectDto, ProjectProfileDto, PublishedPostDto, VideoScriptDto } from "@/lib/types";
-import { SHOOT_STUDIO_PRODUCTS, type ShootStudioProduct } from "@/lib/shoot-studio-catalog";
+import { SHOOT_STUDIO_MODELS, SHOOT_STUDIO_PRODUCTS, type ShootStudioProduct } from "@/lib/shoot-studio-catalog";
 import { cn } from "@/lib/utils";
 
 interface DashboardShellProps {
@@ -396,6 +396,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
       assetLinks: String(formData.get("assetLinks") ?? ""),
       referenceImageUrl: String(formData.get("referenceImageUrl") ?? ""),
       productId: String(formData.get("productId") ?? ""),
+      modelId: String(formData.get("modelId") ?? ""),
       imageFormatKey: String(formData.get("imageFormatKey") ?? "reels_tiktok_cover"),
       imageResolution: String(formData.get("imageResolution") ?? "1080x1920"),
       imageStyle: String(formData.get("imageStyle") ?? ""),
@@ -1021,7 +1022,25 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
                           ))}
                         </select>
                         <span className="text-[11px] font-normal leading-4 text-slate-500">
-                          Pins the exact Shoot Studio garment and auto-selects the matching model size.
+                          Pins the exact Shoot Studio garment. Leave on Auto to detect it from the brief.
+                        </span>
+                      </label>
+                      <label className="grid gap-2 text-sm font-medium text-slate-800">
+                        <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Model (the girl)</span>
+                        <select
+                          name="modelId"
+                          defaultValue={selectedPost.modelId || ""}
+                          className="rounded-[10px] border border-black/10 bg-white/90 px-3 py-2.5 text-[15px] font-medium leading-6 text-slate-950 outline-none focus:border-slate-900 md:text-base"
+                        >
+                          <option value="">Auto — by product size</option>
+                          {SHOOT_STUDIO_MODELS.map((model) => (
+                            <option key={model.id} value={model.id}>
+                              {model.name} · {model.size}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="text-[11px] font-normal leading-4 text-slate-500">
+                          Pins which Shoot Studio model appears. Save the post before generating.
                         </span>
                       </label>
                       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">

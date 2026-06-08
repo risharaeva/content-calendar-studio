@@ -6,6 +6,7 @@ import {
   type ShootStudioProduct,
   defaultModelForProduct,
   fetchShootStudioCatalog,
+  findShootStudioModel,
   findShootStudioProduct,
   inferShootStudioColor,
   inferShootStudioProduct,
@@ -19,6 +20,7 @@ interface RenderImageInput {
   referenceImages?: RenderReferenceImage[];
   imageFormatKey?: string;
   productId?: string;
+  modelId?: string;
 }
 
 interface RenderReferenceImage {
@@ -55,9 +57,10 @@ export async function renderPromptToImage({
   referenceImages = [],
   imageFormatKey = "",
   productId = "",
+  modelId = "",
 }: RenderImageInput) {
   if (settings.imageProvider === "SHOOT_STUDIO") {
-    return renderWithShootStudio(prompt, settings, imageFormatKey, productId);
+    return renderWithShootStudio(prompt, settings, imageFormatKey, productId, modelId);
   }
 
   const base64 = settings.imageProvider === "OPENAI"
@@ -75,6 +78,7 @@ async function renderWithShootStudio(
   settings: AppSettings,
   imageFormatKey: string,
   productId: string,
+  modelId: string,
 ) {
   const baseUrl = normalizeShootStudioUrl(process.env.SHOOT_STUDIO_API_URL ?? settings.localImageEndpoint);
 
@@ -90,8 +94,9 @@ async function renderWithShootStudio(
     inferShootStudioProduct(prompt, catalog.products);
 
   const color = inferShootStudioColor(prompt, product);
-  // Model is auto-selected by the product's size range, not guessed from prompt.
-  const model = defaultModelForProduct(product, catalog.models);
+  // Use the explicitly chosen model when the post pins one; otherwise auto-select
+  // it from the product's size range (the legacy default).
+  const model = findShootStudioModel(modelId, catalog.models) ?? defaultModelForProduct(product, catalog.models);
   const finalPrompt = buildShootStudioPrompt(prompt, product, color, imageFormatKey);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
