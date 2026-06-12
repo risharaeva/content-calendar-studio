@@ -11,6 +11,7 @@ import {
   inferShootStudioColor,
   inferShootStudioProduct,
 } from "@/lib/shoot-studio-catalog";
+import type { FrameTypeValue } from "@/lib/types";
 
 interface RenderImageInput {
   prompt: string;
@@ -21,6 +22,7 @@ interface RenderImageInput {
   imageFormatKey?: string;
   productId?: string;
   modelId?: string;
+  frameType?: FrameTypeValue;
 }
 
 interface RenderReferenceImage {
@@ -31,6 +33,15 @@ interface RenderReferenceImage {
 
 interface StableDiffusionResponse {
   images?: string[];
+}
+
+interface FalImageResponse {
+  images?: Array<{ url?: string }>;
+  image?: { url?: string } | string;
+  url?: string;
+  error?: string;
+  detail?: string | { msg?: string };
+  message?: string;
 }
 
 const LOCAL_IMAGE_WIDTH = 768;
@@ -58,19 +69,118 @@ export async function renderPromptToImage({
   imageFormatKey = "",
   productId = "",
   modelId = "",
+  frameType = "WITH_PERSON",
 }: RenderImageInput) {
   if (settings.imageProvider === "SHOOT_STUDIO") {
-    return renderWithShootStudio(prompt, settings, imageFormatKey, productId, modelId);
+    if (frameType === "WITH_PERSON") {
+      return renderWithShootStudio(prompt, settings, imageFormatKey, productId, modelId);
+    }
+
+    return renderWithoutPerson(prompt, settings, imageFormatKey, productId, frameType);
   }
 
   const base64 = settings.imageProvider === "OPENAI"
-    ? await renderWithOpenAI(prompt)
+    ? await renderWithOpenAI(buildDirectImagePrompt(prompt, imageFormatKey, productId, frameType))
     : await renderWithStableDiffusionWebUi(prompt, settings, referenceImages, imageFormatKey);
 
   return saveBase64Image({
     base64,
     fileName: `${postId}-variant-${variant}.png`,
   });
+}
+
+async function renderWithoutPerson(
+  prompt: string,
+  settings: AppSettings,
+  imageFormatKey: string,
+  productId: string,
+  frameType: FrameTypeValue,
+) {
+  const directPrompt = buildDirectImagePrompt(prompt, imageFormatKey, productId, frameType);
+
+  if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+    return renderWithFal(directPrompt, imageFormatKey);
+  }
+
+  if (process.env.OPENAI_API_KEY) {
+    const base64 = await renderWithOpenAI(directPrompt);
+    return saveBase64Image({
+      base64,
+      fileName: `direct-${Date.now()}.png`,
+    });
+  }
+
+  throw new Error("Product-only and infographic frames need FAL_KEY/FAL_API_KEY or OPENAI_API_KEY. Shoot Studio is used only for WITH_PERSON frames.");
+}
+
+function buildDirectImagePrompt(
+  prompt: string,
+  imageFormatKey: string,
+  productId: string,
+  frameType: FrameTypeValue,
+) {
+  const product = findShootStudioProduct(productId);
+  const productLine = product
+    ? [
+        `Product: ${product.name} (${product.category}).`,
+        `Preserve garment truth: ${product.prompt}.`,
+        `Fit promise: ${product.fitPromise}.`,
+        `Construction: ${product.construction.join(", ")}.`,
+      ].join(" ")
+    : "Product: infer the ILARIA garment from the brief without inventing extra straps, lace, logos, or hardware.";
+
+  const frameRule = frameType === "PRODUCT_ONLY"
+    ? "Create a product-only commercial image. No person, no human body, no model, no mannequin, no face, no hands, no skin. The garment/product is the only hero."
+    : frameType === "USEFUL"
+      ? "Create a useful editorial/infographic-ready product visual. No person, no human body, no model. Use product, layout, shapes, arrows, clean negative space, and simple visual structure."
+      : "Create the custom non-person frame exactly as briefed. Do not add a person unless the brief explicitly asks for one.";
+
+  return [
+    "Create one finished social-ready image for ILARIA Intimates.",
+    frameRule,
+    productLine,
+    `Format direction: ${labelFormatForDirectRenderer(imageFormatKey)}.`,
+    `Creative direction from Content Calendar: ${prompt}`,
+    "Premium ecommerce/editorial quality, accurate product silhouette, realistic fabric texture, clean composition, refined lighting.",
+    "No person, no woman, no man, no human, no body, no face, no hands, no legs, no torso, no mannequin, no skin, no text artifacts, no watermark, no logo overlay, no invented garment details.",
+  ].join("\n");
+}
+
+async function renderWithFal(prompt: string, imageFormatKey: string) {
+  const apiKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("FAL_KEY or FAL_API_KEY is missing.");
+  }
+
+  const model = process.env.FAL_IMAGE_MODEL || "fal-ai/nano-banana-2";
+  const response = await fetch(`https://fal.run/${model}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt,
+      image_size: falImageSizeForFormat(imageFormatKey),
+      output_format: "jpeg",
+    }),
+    signal: AbortSignal.timeout(120000),
+  });
+
+  const payload = (await response.json().catch(() => null)) as FalImageResponse | null;
+
+  if (!response.ok) {
+    throw new Error(extractFalError(payload) || `Fal image generation failed. HTTP ${response.status}`);
+  }
+
+  const imageUrl = extractFalImageUrl(payload);
+
+  if (!imageUrl) {
+    throw new Error("Fal did not return an image URL.");
+  }
+
+  return imageUrl;
 }
 
 async function renderWithShootStudio(
@@ -169,6 +279,45 @@ function labelFormatForShootStudio(imageFormatKey: string) {
   if (imageFormatKey === "product_on_body") return "product-on-body visual; the selected product must be worn by the model";
   if (imageFormatKey === "graphic_collage") return "editorial graphic/collage base image, still coherent and photorealistic";
   return "Instagram 4:5 social image";
+}
+
+function labelFormatForDirectRenderer(imageFormatKey: string) {
+  if (imageFormatKey === "reels_tiktok_cover") return "vertical 9:16 Reels/TikTok cover with strong product-first composition and negative space";
+  if (imageFormatKey === "offer_banner") return "4:5 or 1:1 offer banner base image with clean product area and negative space for typography";
+  if (imageFormatKey === "product_still") return "product-only still life, square or 4:5, product silhouette and fabric details clearly readable";
+  if (imageFormatKey === "graphic_collage") return "editorial product collage or infographic-ready layout, no people";
+  if (imageFormatKey === "carousel") return "Instagram 4:5 carousel slide background, product-first, clean space for headline typography";
+  return "Instagram 4:5 social image, product-first, no person";
+}
+
+function falImageSizeForFormat(imageFormatKey: string) {
+  if (imageFormatKey === "reels_tiktok_cover") return "portrait_16_9";
+  if (imageFormatKey === "product_still") return "square_hd";
+  return "portrait_4_3";
+}
+
+function extractFalImageUrl(payload: FalImageResponse | null) {
+  if (!payload) {
+    return "";
+  }
+
+  if (typeof payload.image === "string") {
+    return payload.image;
+  }
+
+  return payload.images?.find((image) => image.url)?.url ?? payload.image?.url ?? payload.url ?? "";
+}
+
+function extractFalError(payload: FalImageResponse | null) {
+  if (!payload) {
+    return "";
+  }
+
+  if (typeof payload.detail === "object") {
+    return payload.detail.msg ?? payload.error ?? payload.message ?? "";
+  }
+
+  return payload.error ?? payload.detail ?? payload.message ?? "";
 }
 
 function aspectRatioForFormat(imageFormatKey: string) {

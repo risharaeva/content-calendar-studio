@@ -108,6 +108,12 @@ interface GeneratedPacket {
   bannerBrief?: BannerBriefDto | null;
 }
 
+interface RenderPromptSpec {
+  prompt: string;
+  frameType: FrameTypeValue;
+  frameDescription?: string;
+}
+
 interface RecommendationSeed {
   theme: string;
   goal: string;
@@ -1103,17 +1109,18 @@ export async function renderPostImages(postId: string, mode = "cover") {
 
       for (const [index, prompt] of slidePrompts.entries()) {
         const imagePath = await renderPromptToImage({
-          prompt: applyStyleBrief(prompt, styleBrief),
+          prompt: applyStyleBrief(prompt.prompt, styleBrief),
           postId,
           variant: index + 1,
           settings,
           imageFormatKey: post.imageFormatKey,
           productId: post.productId,
           modelId: post.modelId,
+          frameType: prompt.frameType,
           referenceImages: referenceList,
         });
 
-        slideImages.push({ prompt, imagePath, variant: index + 1 });
+        slideImages.push({ prompt: prompt.prompt, imagePath, variant: index + 1 });
       }
 
       await replaceGeneratedImages(postId, slideImages);
@@ -1134,18 +1141,19 @@ export async function renderPostImages(postId: string, mode = "cover") {
 
   for (const [index, prompt] of promptsToRender.entries()) {
     const imagePath = await renderPromptToImage({
-      prompt: applyStyleBrief(prompt, styleBrief),
+      prompt: applyStyleBrief(prompt.prompt, styleBrief),
       postId,
       variant: index + 1,
       settings,
       imageFormatKey: post.imageFormatKey,
       productId: post.productId,
       modelId: post.modelId,
+      frameType: prompt.frameType,
       referenceImages: referenceList,
     });
 
     images.push({
-      prompt,
+      prompt: prompt.prompt,
       imagePath,
       variant: index + 1,
     });
@@ -1196,27 +1204,31 @@ function frameTypeRenderGuidance(frameType: FrameTypeValue, frameDescription: st
 // Turns the packet's per-slide carousel briefs into standalone render prompts.
 // Returns [] when the packet has no carouselSlides (so the caller falls back to
 // the local SVG typography slides).
-function buildCarouselSlideRenderPrompts(post: ContentPost & { packet: CampaignPacket }): string[] {
+function buildCarouselSlideRenderPrompts(post: ContentPost & { packet: CampaignPacket }): RenderPromptSpec[] {
   const slides = parseCarouselSlides(post.packet.carouselSlides);
 
   return slides
-    .map((slide) => {
+    .flatMap((slide) => {
       const base = slide.mediaPrompt || post.packet.visualBrief || post.visualConcept || post.angle;
-      if (!base) return "";
-      return [
-        base,
-        `Carousel ${slide.kicker || `slide ${slide.index}`} for "${post.theme}".`,
-        frameTypeRenderGuidance(slide.frameType, slide.frameDescription),
-        "Leave clean negative space for the headline typography added later. No text in the image.",
-      ]
-        .filter(Boolean)
-        .join("\n");
-    })
-    .filter(Boolean);
+      if (!base) return [];
+      return [{
+        prompt: [
+          base,
+          `Carousel ${slide.kicker || `slide ${slide.index}`} for "${post.theme}".`,
+          frameTypeRenderGuidance(slide.frameType, slide.frameDescription),
+          "Leave clean negative space for the headline typography added later. No text in the image.",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        frameType: slide.frameType,
+        frameDescription: slide.frameDescription,
+      } satisfies RenderPromptSpec];
+    });
 }
 
-function buildShootStudioRenderPrompts(post: ContentPost & { packet: CampaignPacket }, prompts: string[], mode: string) {
+function buildShootStudioRenderPrompts(post: ContentPost & { packet: CampaignPacket }, prompts: string[], mode: string): RenderPromptSpec[] {
   const seedPrompt = prompts[0] || post.packet.visualBrief || post.visualConcept || post.angle;
+  const defaultFrameType = post.defaultFrameType;
 
   if (mode === "scene_refs") {
     // Prefer the generated video script's scenes as filming references; fall back
@@ -1224,30 +1236,48 @@ function buildShootStudioRenderPrompts(post: ContentPost & { packet: CampaignPac
     const videoScript = parseVideoScript(post.packet.videoScript);
     if (videoScript && videoScript.scenes.length) {
       return videoScript.scenes.map((scene) =>
-        [
-          scene.description || seedPrompt,
-          `Scene reference ${scene.index} for "${post.theme}".`,
-          "Make it useful as a filming reference: clear composition, adult model, product readable, no text.",
-        ].join("\n"),
+        ({
+          prompt: [
+            scene.description || seedPrompt,
+            `Scene reference ${scene.index} for "${post.theme}".`,
+            defaultFrameType === "WITH_PERSON"
+              ? "Make it useful as a filming reference: clear composition, adult model, product readable, no text."
+              : "Make it useful as a filming reference: clear product/composition, no person, no model, no body, no text.",
+          ].join("\n"),
+          frameType: defaultFrameType,
+        }),
       );
     }
 
     return [
-      [
-        seedPrompt,
-        `Scene reference 1: first-frame / cover scene for "${post.theme}".`,
-        "Make it useful as a filming reference: clear composition, adult model, product readable, no text.",
-      ].join("\n"),
-      [
-        seedPrompt,
-        `Scene reference 2: problem or tension moment for "${post.angle}".`,
-        "Show the real-life situation clearly, tasteful and social-ready, no text.",
-      ].join("\n"),
-      [
-        seedPrompt,
-        `Scene reference 3: product proof / detail moment for "${post.goal}".`,
-        "Focus on product logic, fabric, fit, comfort, or outfit use. No text.",
-      ].join("\n"),
+      {
+        prompt: [
+          seedPrompt,
+          `Scene reference 1: first-frame / cover scene for "${post.theme}".`,
+          defaultFrameType === "WITH_PERSON"
+            ? "Make it useful as a filming reference: clear composition, adult model, product readable, no text."
+            : "Make it product-first: no person, no model, no body, no text.",
+        ].join("\n"),
+        frameType: defaultFrameType,
+      },
+      {
+        prompt: [
+          seedPrompt,
+          `Scene reference 2: problem or tension moment for "${post.angle}".`,
+          defaultFrameType === "WITH_PERSON"
+            ? "Show the real-life situation clearly, tasteful and social-ready, no text."
+            : "Show the product/problem visually without any human body, no text.",
+        ].join("\n"),
+        frameType: defaultFrameType,
+      },
+      {
+        prompt: [
+          seedPrompt,
+          `Scene reference 3: product proof / detail moment for "${post.goal}".`,
+          "Focus on product logic, fabric, fit, comfort, or outfit use. No text.",
+        ].join("\n"),
+        frameType: defaultFrameType,
+      },
     ];
   }
 
@@ -1256,15 +1286,19 @@ function buildShootStudioRenderPrompts(post: ContentPost & { packet: CampaignPac
     const banner = parseBannerBrief(post.packet.bannerBrief);
     if (banner && (banner.imagePrompt || banner.overlayText)) {
       return [
-        [
-          banner.imagePrompt || seedPrompt,
-          `Banner background for "${post.theme}".`,
-          frameTypeRenderGuidance(banner.frameType, banner.frameDescription),
-          banner.overlayText
-            ? `Leave generous clean negative space for the overlay text: "${banner.overlayText}".`
-            : "Leave generous clean negative space for overlay text.",
-          "No text in the image.",
-        ].join("\n"),
+        {
+          prompt: [
+            banner.imagePrompt || seedPrompt,
+            `Banner background for "${post.theme}".`,
+            frameTypeRenderGuidance(banner.frameType, banner.frameDescription),
+            banner.overlayText
+              ? `Leave generous clean negative space for the overlay text: "${banner.overlayText}".`
+              : "Leave generous clean negative space for overlay text.",
+            "No text in the image.",
+          ].join("\n"),
+          frameType: banner.frameType,
+          frameDescription: banner.frameDescription,
+        },
       ];
     }
   }
@@ -1273,14 +1307,19 @@ function buildShootStudioRenderPrompts(post: ContentPost & { packet: CampaignPac
   const coverHook = post.postType === "VIDEO" ? parseVideoScript(post.packet.videoScript)?.coverHook ?? "" : "";
 
   return [
-    [
-      seedPrompt,
-      `Cover image for "${post.theme}".`,
-      coverHook ? `First-frame hook: "${coverHook}".` : "",
-      "Create one strong social first-frame image. Leave clean negative space for typography added later. No text in the image.",
-    ]
-      .filter(Boolean)
-      .join("\n"),
+    {
+      prompt: [
+        seedPrompt,
+        `Cover image for "${post.theme}".`,
+        coverHook ? `First-frame hook: "${coverHook}".` : "",
+        frameTypeRenderGuidance(defaultFrameType, post.frameDescription),
+        "Create one strong social first-frame image. Leave clean negative space for typography added later. No text in the image.",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      frameType: defaultFrameType,
+      frameDescription: post.frameDescription,
+    },
   ];
 }
 
